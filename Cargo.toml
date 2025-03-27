@@ -1,0 +1,74 @@
+[workspace]
+resolver = "2"
+members = [
+	"surplus-cli",
+	"surplus",
+]
+
+[workspace.package]
+edition = "2024"
+authors = [
+	"Joshua Lee Junon (https://github.com/qix-)"
+]
+license = "MIT"
+
+[workspace.dependencies]
+clap = { version = "4.5.34", features = ["derive"] }
+oxc = { version = "0.61.2", features = ["semantic", "codegen"] }
+oxc_traverse = "0.61.2"
+
+[workspace.lints.rust]
+missing_docs = "warn"
+elided_lifetimes_in_paths = "deny"
+future-incompatible = "warn"
+missing-unsafe-on-extern = "warn"
+unused-lifetimes = "warn"
+unused-qualifications = "warn"
+unused-import-braces = "warn"
+#unused-crate-dependencies = "warn" # TODO(qix-): Sadly, super bugged: https://github.com/rust-lang/rust/issues/57274
+variant-size-differences = "warn"
+trivial-numeric-casts = "warn"
+unit-bindings = "warn"
+unused-features = "warn" # TODO(qix-): Doesn't do what I'd like it to: https://github.com/rust-lang/rust/issues/23528
+
+[workspace.lints.rustdoc]
+all = { level = "deny", priority = -1 }
+private_doc_tests = "allow"
+private_intra_doc_links = "allow"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+missing_docs_in_private_items = "warn"
+integer_division = "warn"
+module_name_repetitions = "allow"
+verbose_bit_mask = "allow"
+too_many_lines = "allow"
+missing_errors_doc = "allow"
+struct_field_names = "allow"
+items_after_statements = "allow"
+cast_possible_truncation = "allow" # TODO(qix-): Temporary until the virt/phys types land.
+assertions_on_constants = "allow"
+new_without_default = "allow"
+needless_doctest_main = "allow"
+tabs_in_doc_comments = "allow"
+redundant_closure_for_method_calls = "allow"
+#undocumented_unsafe_blocks = "warn"
+
+[profile.dev]
+panic = "abort"            # Use "abort" panic strategy
+debug = "full"             # Full debugging symbols
+
+[profile.release]
+opt-level = 3              # Maximum optimizations
+lto = "fat"                # Perform LTO across all crates
+codegen-units = 1          # Reduce number of codegen units to increase optimizations.
+strip = true               # Strip symbols from binary
+incremental = false        # Disable incremental building
+panic = "abort"            # Use "abort" panic strategy
+debug = 0                  # Do not generate debug information
+
+[profile.relwithdebinfo]
+inherits = "release"
+debug = "full"             # Full debugging symbols
+strip = false              # Don't strip symbols from binary
