@@ -6,7 +6,11 @@ use std::{
 
 use clap::Parser;
 use oxc::{
-	allocator::Allocator, codegen::Codegen, diagnostics::Severity, semantic::SemanticBuilder,
+	allocator::Allocator,
+	codegen::{Codegen, CodegenOptions},
+	diagnostics::Severity,
+	mangler::{MangleOptions, MangleOptionsKeepNames},
+	semantic::SemanticBuilder,
 	span::SourceType,
 };
 
@@ -14,18 +18,21 @@ use oxc::{
 #[derive(Debug, Parser)]
 struct Args {
 	/// Where to output the bundle. Defaults to
-	/// stdout. Intermediate folders must exist.
+	/// stdout; ntermediate folders must exist
 	#[arg(short = 'o', long = "output")]
 	output: Option<String>,
 	/// The name of the `S.js` package to import from
-	/// if transformation occurs.
+	/// if transformation occurs
 	#[arg(short = 'S', long = "import", default_value = "@surplus/s")]
 	import_sjs: String,
-	/// Treat warnings as errors.
+	/// Treat warnings as errors
 	#[arg(short = 'W')]
 	warnings_as_errors: bool,
-	/// The entry point of the Surplus bundle.
-	/// If not provided, uses stdin.
+	/// Don't minify the output
+	#[arg(short = 'M', long = "no-minify")]
+	no_minify: bool,
+	/// The entry point of the Surplus bundle
+	/// (defaults to stdin)
 	entry_point: Option<String>,
 }
 
@@ -118,7 +125,33 @@ fn main() {
 		}
 	}
 
-	let generated = Codegen::new().build(&program);
+	let mut codegen_options = CodegenOptions::default();
+	codegen_options.minify = !args.no_minify;
+	codegen_options.comments = args.no_minify;
+
+	let scoping = if args.no_minify {
+		surplus_result.scoping
+	} else {
+		let semantic = SemanticBuilder::new()
+			.with_check_syntax_error(false)
+			.with_scope_tree_child_ids(true)
+			.build(&program);
+
+		assert!(semantic.errors.len() == 0);
+
+		let mut options = MangleOptions::default();
+		options.keep_names = MangleOptionsKeepNames::all_false();
+		options.top_level = true;
+
+		oxc::mangler::Mangler::new()
+			.with_options(options)
+			.build_with_semantic(semantic.semantic, &program)
+	};
+
+	let generated = Codegen::new()
+		.with_options(codegen_options)
+		.with_scoping(Some(scoping))
+		.build(&program);
 	if let Some(output) = args.output {
 		std::fs::write(output, &generated.code).expect("failed to write to output");
 	} else {

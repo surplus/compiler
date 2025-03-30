@@ -14,7 +14,7 @@ license = "MIT"
 
 [workspace.dependencies]
 clap = { version = "4.5.34", features = ["derive"] }
-oxc = { version = "0.61.2", features = ["semantic", "codegen"] }
+oxc = { version = "0.61.2", features = ["semantic", "codegen", "minifier", "mangler"] }
 oxc_traverse = "0.61.2"
 
 [workspace.lints.rust]
