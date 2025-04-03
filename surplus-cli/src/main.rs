@@ -137,7 +137,7 @@ fn main() {
 			.with_scope_tree_child_ids(true)
 			.build(&program);
 
-		assert!(semantic.errors.len() == 0);
+		assert!(semantic.errors.is_empty());
 
 		let mut options = MangleOptions::default();
 		options.keep_names = MangleOptionsKeepNames::all_false();

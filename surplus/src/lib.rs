@@ -273,8 +273,7 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 			.opening_element
 			.name
 			.get_identifier()
-			.map(|i| i.span)
-			.unwrap_or_else(|| node.opening_element.span);
+			.map_or_else(|| node.opening_element.span, |i| i.span);
 		let ident_sym = ctx.scoping_mut().create_symbol(
 			ident_span,
 			IDENT,
@@ -1130,7 +1129,7 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 							},
 						)),
 						type_arguments: None,
-						arguments: Vec::from_array_in([test_expression.into()], self.allocator),
+						arguments: Vec::from_array_in([test_expression], self.allocator),
 						optional: false,
 						pure: true,
 					})),
