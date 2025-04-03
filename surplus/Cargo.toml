@@ -9,6 +9,7 @@ license.workspace = true
 [dependencies]
 oxc.workspace = true
 oxc_traverse.workspace = true
+oxc_quote.workspace = true
 
 [lints]
 workspace = true

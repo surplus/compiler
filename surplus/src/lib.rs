@@ -7,16 +7,14 @@ use oxc::{
 	allocator::{Allocator, Box, CloneIn, FromIn, Vec},
 	ast::ast::{
 		Argument, ArrayExpression, ArrowFunctionExpression, AssignmentExpression,
-		AssignmentOperator, AssignmentTarget, BinaryExpression, BinaryOperator, BindingIdentifier,
-		BindingPattern, BindingPatternKind, BooleanLiteral, CallExpression, ConditionalExpression,
-		Expression, ExpressionStatement, FormalParameter, FormalParameterKind, FormalParameters,
-		FunctionBody, IdentifierName, IdentifierReference, ImportDeclaration,
+		AssignmentOperator, AssignmentTarget, BindingIdentifier, BindingPatternKind,
+		BooleanLiteral, CallExpression, Expression, ExpressionStatement, FormalParameterKind,
+		FormalParameters, FunctionBody, IdentifierName, IdentifierReference, ImportDeclaration,
 		ImportDeclarationSpecifier, ImportDefaultSpecifier, ImportOrExportKind, JSXAttribute,
 		JSXAttributeName, JSXAttributeValue, JSXChild, JSXElement, JSXElementName, JSXExpression,
 		JSXExpressionContainer, JSXIdentifier, JSXMemberExpressionObject, ObjectExpression,
 		ObjectProperty, ObjectPropertyKind, ParenthesizedExpression, Program, PropertyKey,
 		PropertyKind, ReturnStatement, Statement, StaticMemberExpression, StringLiteral,
-		VariableDeclaration, VariableDeclarationKind, VariableDeclarator,
 	},
 	diagnostics::OxcDiagnostic,
 	semantic::{
@@ -25,6 +23,7 @@ use oxc::{
 	},
 	span::{Atom, Span},
 };
+use oxc_quote::{jsquote, jsquote_expr};
 use oxc_traverse::{Traverse, TraverseCtx};
 
 const S_IDENT: &str = "__$S__";
@@ -133,103 +132,6 @@ impl<'a> SurplusTraverser<'a> {
 }
 
 impl<'a> SurplusTraverser<'a> {
-	#[expect(dead_code)]
-	fn s_computation<const N: usize>(
-		&self,
-		ctx: &mut TraverseCtx<'a>,
-		span: Span,
-		stmts: [Statement<'a>; N],
-	) -> Expression<'a> {
-		Expression::CallExpression(ctx.alloc(CallExpression {
-			span,
-			callee: Expression::Identifier(ctx.alloc(IdentifierReference {
-				span: Span::default(),
-				name: S,
-				reference_id: Cell::new(Some(self.s_ref)),
-			})),
-			type_arguments: None,
-			arguments: Vec::from_array_in(
-				[Argument::ArrowFunctionExpression(ctx.alloc(
-					ArrowFunctionExpression {
-						span,
-						expression: false,
-						r#async: false,
-						type_parameters: None,
-						params: ctx.alloc(FormalParameters {
-							span,
-							kind: FormalParameterKind::ArrowFormalParameters,
-							items: Vec::new_in(self.allocator),
-							rest: None,
-						}),
-						return_type: None,
-						body: ctx.alloc(FunctionBody {
-							span,
-							directives: Vec::new_in(self.allocator),
-							statements: Vec::from_array_in(stmts, self.allocator),
-						}),
-						scope_id: Cell::new(None),
-						pure: false,
-					},
-				))],
-				self.allocator,
-			),
-			optional: false,
-			pure: false,
-		}))
-	}
-
-	fn s_expression(
-		&self,
-		ctx: &mut TraverseCtx<'a>,
-		span: Span,
-		expr: Expression<'a>,
-	) -> Expression<'a> {
-		Expression::CallExpression(ctx.alloc(CallExpression {
-			span,
-			callee: Expression::Identifier(ctx.alloc(IdentifierReference {
-				span: Span::default(),
-				name: S,
-				reference_id: Cell::new(Some(self.s_ref)),
-			})),
-			type_arguments: None,
-			arguments: Vec::from_array_in(
-				[Argument::ArrowFunctionExpression(ctx.alloc(
-					ArrowFunctionExpression {
-						span,
-						expression: true,
-						r#async: false,
-						type_parameters: None,
-						params: ctx.alloc(FormalParameters {
-							span,
-							kind: FormalParameterKind::ArrowFormalParameters,
-							items: Vec::new_in(self.allocator),
-							rest: None,
-						}),
-						return_type: None,
-						body: ctx.alloc(FunctionBody {
-							span,
-							directives: Vec::new_in(self.allocator),
-							statements: Vec::from_array_in(
-								[Statement::ExpressionStatement(ctx.alloc(
-									ExpressionStatement {
-										span,
-										expression: expr,
-									},
-								))],
-								self.allocator,
-							),
-						}),
-						scope_id: Cell::new(None),
-						pure: false,
-					},
-				))],
-				self.allocator,
-			),
-			optional: false,
-			pure: false,
-		}))
-	}
-
 	fn member_to_expression(
 		&self,
 		ctx: &mut TraverseCtx<'a>,
@@ -392,50 +294,17 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 					)));
 			}
 
-			// Call the relevant function.
-			elem.statements
-				.push(Statement::VariableDeclaration(ctx.alloc(
-					VariableDeclaration {
-						span: node.span,
-						kind: VariableDeclarationKind::Const,
-						declare: false,
-						declarations: Vec::from_array_in(
-							[VariableDeclarator {
-								definite: false,
-								span: node.span,
-								kind: VariableDeclarationKind::Const,
-								id: BindingPattern {
-									kind: BindingPatternKind::BindingIdentifier(ctx.alloc(
-										BindingIdentifier {
-											span: node.span,
-											name: elem.elem.as_ref().unwrap().name,
-											symbol_id: Cell::new(Some(
-												elem.elem.as_ref().unwrap().sym,
-											)),
-										},
-									)),
-									type_annotation: None,
-									optional: false,
-								},
-								init: Some(Expression::CallExpression(ctx.alloc(CallExpression {
-									span: node.span,
-									callee: target,
-									type_arguments: None,
-									arguments: Vec::from_array_in(
-										[Argument::ObjectExpression(Box::from_in(
-											con_obj,
-											self.allocator,
-										))],
-										self.allocator,
-									),
-									optional: false,
-									pure: false,
-								}))),
-							}],
-							self.allocator,
-						),
-					},
-				)));
+			let con_obj_expr = Expression::ObjectExpression(ctx.alloc(con_obj));
+
+			let elem_ident = BindingPatternKind::BindingIdentifier(ctx.alloc(BindingIdentifier {
+				span: node.span,
+				name: elem.elem.as_ref().unwrap().name,
+				symbol_id: Cell::new(Some(elem.elem.as_ref().unwrap().sym)),
+			}));
+
+			elem.statements.extend(jsquote!(self.allocator, node.span, {
+				const #elem_ident = #target(#con_obj_expr);
+			}));
 		} else {
 			// Otherwise, create the element and stick it first in the statements list.
 			let (ns, name, name_span) = match &node.opening_element.name {
@@ -459,6 +328,7 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 			} else {
 				"createElementNS"
 			};
+
 			let mut args = Vec::with_capacity_in(2, self.allocator);
 			if let Some((ns, span)) = ns {
 				args.push(Argument::StringLiteral(ctx.alloc(StringLiteral {
@@ -478,133 +348,52 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 			let children_expression = if child_array.elements.is_empty() {
 				None
 			} else {
-				let compile_fragment = Expression::CallExpression(ctx.alloc(CallExpression {
+				let sident = Expression::Identifier(ctx.alloc(IdentifierReference {
 					span: node.span,
-					callee: Expression::StaticMemberExpression(ctx.alloc(StaticMemberExpression {
-						span: node.span,
-						object: Expression::Identifier(ctx.alloc(IdentifierReference {
-							span: node.span,
-							name: S,
-							reference_id: Cell::new(Some(self.s_ref)),
-						})),
-						property: IdentifierName {
-							span: node.span,
-							name: Atom::new_const("compile"),
-						},
-						optional: false,
-					})),
-					type_arguments: None,
-					optional: false,
-					pure: false,
-					arguments: Vec::from_array_in(
-						[Argument::ArrayExpression(ctx.alloc(child_array))],
-						self.allocator,
-					),
+					name: S,
+					reference_id: Cell::new(Some(self.s_ref)),
 				}));
 
-				let replace_children = Expression::CallExpression(
-					ctx.alloc(CallExpression {
-						span: node.span,
-						callee: Expression::StaticMemberExpression(
-							ctx.alloc(StaticMemberExpression {
-								span: node.span,
-								object: self
-									.element_stack
-									.last()
-									.unwrap()
-									.elem
-									.as_ref()
-									.unwrap()
-									.ident
-									.clone_in(self.allocator),
-								property: IdentifierName {
-									span: node.span,
-									name: Atom::new_const("replaceChildren"),
-								},
-								optional: false,
-							}),
-						),
-						type_arguments: None,
-						arguments: Vec::from_array_in(
-							[Argument::SpreadElement(ctx.alloc(
-								oxc::ast::ast::SpreadElement {
-									span: node.span,
-									argument: compile_fragment,
-								},
-							))],
-							self.allocator,
-						),
-						optional: false,
-						pure: false,
-					}),
-				);
+				let elem_name = self
+					.element_stack
+					.last()
+					.unwrap()
+					.elem
+					.as_ref()
+					.unwrap()
+					.ident
+					.clone_in(self.allocator);
 
-				let computation = self.s_expression(ctx, node.span, replace_children);
+				let child_array = Argument::ArrayExpression(ctx.alloc(child_array));
 
-				Some(Statement::ExpressionStatement(ctx.alloc(
-					ExpressionStatement {
-						span: node.span,
-						expression: computation,
-					},
-				)))
+				Some(jsquote!(self.allocator, node.span, {
+					#sident(() => #elem_name.replaceChildren(...#sident.compile(#child_array)));
+				}))
 			};
 
 			let elem = self.element_stack.last_mut().unwrap();
 
-			elem.statements.insert(
-				0,
-				Statement::VariableDeclaration(ctx.alloc(VariableDeclaration {
-					span: node.span,
-					kind: VariableDeclarationKind::Const,
-					declare: false,
-					declarations: Vec::from_array_in(
-						[VariableDeclarator {
-							definite: false,
-							span: node.span,
-							kind: VariableDeclarationKind::Const,
-							id: BindingPattern {
-								kind: BindingPatternKind::BindingIdentifier(ctx.alloc(
-									BindingIdentifier {
-										span: node.span,
-										name: elem.elem.as_ref().unwrap().name,
-										symbol_id: Cell::new(Some(elem.elem.as_ref().unwrap().sym)),
-									},
-								)),
-								type_annotation: None,
-								optional: false,
-							},
-							init: Some(Expression::CallExpression(ctx.alloc(CallExpression {
-								span: node.span,
-								callee: Expression::StaticMemberExpression(ctx.alloc(
-									StaticMemberExpression {
-										span: node.span,
-										object: Expression::Identifier(ctx.alloc(
-											IdentifierReference {
-												span: node.span,
-												name: Atom::new_const("document"),
-												reference_id: Cell::new(None),
-											},
-										)),
-										property: IdentifierName {
-											span: node.span,
-											name: Atom::new_const(create_name),
-										},
-										optional: false,
-									},
-								)),
-								type_arguments: None,
-								arguments: args,
-								optional: false,
-								pure: false,
-							}))),
-						}],
-						self.allocator,
-					),
-				})),
-			);
+			let elem_name = elem.elem.as_ref().unwrap().ident.clone_in(self.allocator);
+
+			let vardecl = jsquote!(self.allocator, node.span, {
+				const #elem_name = document.#create_name();
+			});
+
+			let Some(Statement::VariableDeclaration(mut vardecl)) = vardecl.into_iter().next()
+			else {
+				unreachable!()
+			};
+			let Expression::CallExpression(call) = vardecl.declarations[0].init.as_mut().unwrap()
+			else {
+				unreachable!()
+			};
+			call.arguments.extend(args);
+
+			elem.statements
+				.insert(0, Statement::VariableDeclaration(vardecl));
 
 			if let Some(child_population_statement) = children_expression {
-				elem.statements.push(child_population_statement);
+				elem.statements.extend(child_population_statement);
 			}
 		}
 
@@ -962,209 +751,71 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 				);
 			}
 
-			let (name, remove_name) = if ns.is_some() {
-				(
-					Atom::new_const("setAttributeNS"),
-					Atom::new_const("removeAttributeNS"),
-				)
-			} else {
-				(
-					Atom::new_const("setAttribute"),
-					Atom::new_const("removeAttribute"),
-				)
-			};
-
-			let mut args = Vec::with_capacity_in(3, self.allocator);
-
-			if let Some(ns) = ns {
-				args.push(Argument::StringLiteral(ns));
-			}
-
-			args.push(Argument::StringLiteral(key));
-
 			let test_expression =
 				Argument::ParenthesizedExpression(ctx.alloc(ParenthesizedExpression {
 					span: node.span,
-					expression: value,
+					expression: value.clone_in(self.allocator),
 				}));
 
-			let expression = if needs_computation {
-				args.push(Argument::Identifier(ctx.alloc(IdentifierReference {
-					span: node.span,
-					name: Atom::new_const("v"),
-					reference_id: Cell::new(None),
-				})));
+			let elem_ident = &self
+				.element_stack
+				.last()
+				.unwrap()
+				.elem
+				.as_ref()
+				.unwrap()
+				.ident;
 
-				let test_and_set_expr = Expression::ConditionalExpression(
-					ctx.alloc(ConditionalExpression {
-						span: node.span,
-						test: Expression::BinaryExpression(ctx.alloc(BinaryExpression {
+			let key = Argument::StringLiteral(key);
+
+			let test_and_set_expr = if let Some(ns) = &ns {
+				let ns = Argument::StringLiteral(ns.clone_in(self.allocator));
+
+				jsquote_expr!(self.allocator, node.span, {
+					v === undefined
+						? #elem_ident.removeAttributeNS(#ns, #key)
+						: #elem_ident.setAttributeNS(#ns, #key, #value)
+				})
+			} else {
+				jsquote_expr!(self.allocator, node.span, {
+					v === undefined
+						? #elem_ident.removeAttribute(#key)
+						: #elem_ident.setAttribute(#key, #value)
+				})
+			};
+
+			let expression = if needs_computation {
+				let test_and_set_expr = Vec::from_array_in(
+					[Statement::ExpressionStatement(ctx.alloc(
+						ExpressionStatement {
 							span: node.span,
-							left: Expression::Identifier(ctx.alloc(IdentifierReference {
-								span: node.span,
-								name: Atom::new_const("v"),
-								reference_id: Cell::new(None),
-							})),
-							operator: BinaryOperator::StrictEquality,
-							right: Expression::Identifier(ctx.alloc(IdentifierReference {
-								span: node.span,
-								name: Atom::new_const("undefined"),
-								reference_id: Cell::new(None),
-							})),
-						})),
-						consequent: Expression::CallExpression(
-							ctx.alloc(CallExpression {
-								span: node.span,
-								callee: Expression::StaticMemberExpression(
-									ctx.alloc(StaticMemberExpression {
-										span: node.span,
-										optional: false,
-										object: self
-											.element_stack
-											.last()
-											.unwrap()
-											.elem
-											.as_ref()
-											.unwrap()
-											.ident
-											.clone_in(self.allocator),
-										property: IdentifierName {
-											span: node.span,
-											name: remove_name,
-										},
-									}),
-								),
-								type_arguments: None,
-								arguments: Vec::from_iter_in(
-									args.iter().take(2).map(|a| a.clone_in(self.allocator)),
-									self.allocator,
-								),
-								optional: false,
-								pure: false,
-							}),
-						),
-						alternate: Expression::CallExpression(
-							ctx.alloc(CallExpression {
-								span: node.span,
-								callee: Expression::StaticMemberExpression(
-									ctx.alloc(StaticMemberExpression {
-										span: node.span,
-										optional: false,
-										object: self
-											.element_stack
-											.last()
-											.unwrap()
-											.elem
-											.as_ref()
-											.unwrap()
-											.ident
-											.clone_in(self.allocator),
-										property: IdentifierName {
-											span: node.span,
-											name,
-										},
-									}),
-								),
-								type_arguments: None,
-								arguments: args,
-								optional: false,
-								pure: false,
-							}),
-						),
-					}),
+							expression: test_and_set_expr,
+						},
+					))],
+					self.allocator,
 				);
 
-				self.s_expression(
-					ctx,
-					node.span,
-					Expression::CallExpression(ctx.alloc(CallExpression {
-						span: node.span,
-						callee: Expression::ArrowFunctionExpression(ctx.alloc(
-							ArrowFunctionExpression {
-								span: node.span,
-								expression: true,
-								r#async: false,
-								type_parameters: None,
-								params: ctx.alloc(FormalParameters {
-									span: node.span,
-									kind: FormalParameterKind::ArrowFormalParameters,
-									items: Vec::from_array_in(
-										[FormalParameter {
-											accessibility: None,
-											r#override: false,
-											decorators: Vec::new_in(self.allocator),
-											readonly: false,
-											span: node.span,
-											pattern: BindingPattern {
-												optional: false,
-												type_annotation: None,
-												kind: BindingPatternKind::BindingIdentifier(
-													ctx.alloc(BindingIdentifier {
-														span: node.span,
-														name: Atom::new_const("v"),
-														symbol_id: Cell::new(None),
-													}),
-												),
-											},
-										}],
-										self.allocator,
-									),
-									rest: None,
-								}),
-								return_type: None,
-								body: ctx.alloc(FunctionBody {
-									span: node.span,
-									directives: Vec::new_in(self.allocator),
-									statements: Vec::from_array_in(
-										[Statement::ExpressionStatement(ctx.alloc(
-											ExpressionStatement {
-												span: node.span,
-												expression: test_and_set_expr,
-											},
-										))],
-										self.allocator,
-									),
-								}),
-								scope_id: Cell::new(None),
-								pure: false,
-							},
-						)),
-						type_arguments: None,
-						arguments: Vec::from_array_in([test_expression.into()], self.allocator),
-						optional: false,
-						pure: true,
-					})),
-				)
+				let sexpr = Expression::Identifier(ctx.alloc(IdentifierReference {
+					span: Span::default(),
+					name: S,
+					reference_id: Cell::new(Some(self.s_ref)),
+				}));
+
+				jsquote_expr!(self.allocator, node.span, {
+					#sexpr(() => (v => #test_and_set_expr)(#test_expression))
+				})
 			} else {
-				args.push(test_expression);
-				Expression::CallExpression(
-					ctx.alloc(CallExpression {
-						span: node.span,
-						callee: Expression::StaticMemberExpression(
-							ctx.alloc(StaticMemberExpression {
-								span: node.span,
-								optional: false,
-								object: self
-									.element_stack
-									.last()
-									.unwrap()
-									.elem
-									.as_ref()
-									.unwrap()
-									.ident
-									.clone_in(self.allocator),
-								property: IdentifierName {
-									span: node.span,
-									name,
-								},
-							}),
-						),
-						type_arguments: None,
-						arguments: args,
-						optional: false,
-						pure: false,
-					}),
-				)
+				if let Some(ns) = &ns {
+					let ns = Argument::StringLiteral(ns.clone_in(self.allocator));
+
+					jsquote_expr!(self.allocator, node.span, {
+						#elem_ident.setAttributeNS(#ns, #key, #value)
+					})
+				} else {
+					jsquote_expr!(self.allocator, node.span, {
+						#elem_ident.setAttribute(#key, #value)
+					})
+				}
 			};
 
 			self.element_stack
@@ -1222,51 +873,31 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 					return;
 				}
 
+				let text_node = Argument::StringLiteral(ctx.alloc(StringLiteral {
+					span: text.span,
+					value: text.value,
+					raw: text.raw,
+					lossy: false,
+				}));
+
 				self.element_stack.last_mut().unwrap().child_exprs.push(
-					Expression::CallExpression(ctx.alloc(CallExpression {
-						span: text.span,
-						callee: Expression::StaticMemberExpression(ctx.alloc(
-							StaticMemberExpression {
-								span: text.span,
-								object: Expression::Identifier(ctx.alloc(IdentifierReference {
-									span: text.span,
-									name: Atom::new_const("document"),
-									reference_id: Cell::new(None),
-								})),
-								property: IdentifierName {
-									span: text.span,
-									name: Atom::new_const("createTextNode"),
-								},
-								optional: false,
-							},
-						)),
-						type_arguments: None,
-						arguments: Vec::from_array_in(
-							[Argument::StringLiteral(ctx.alloc(StringLiteral {
-								span: text.span,
-								value: text.value,
-								raw: text.raw,
-								lossy: false,
-							}))],
-							self.allocator,
-						),
-						optional: false,
-						pure: false,
-					})),
+					jsquote_expr!(&self.allocator, text.span, { document.createTextNode(#text_node) }),
 				);
 			}
 			JSXChild::ExpressionContainer(expr) => {
-				let expr_sexpr = self.s_expression(
-					ctx,
-					expr.span,
-					expr.expression.clone_in(self.allocator).into_expression(),
-				);
+				let sexpr = Expression::Identifier(ctx.alloc(IdentifierReference {
+					span: Span::default(),
+					name: S,
+					reference_id: Cell::new(Some(self.s_ref)),
+				}));
 
 				self.element_stack
 					.last_mut()
 					.unwrap()
 					.child_exprs
-					.push(expr_sexpr);
+					.push(jsquote_expr!(self.allocator, expr.span, {
+						#sexpr(() => #expr)
+					}));
 			}
 			JSXChild::Spread(_expr) => {
 				todo!("JSXChild::Spread");

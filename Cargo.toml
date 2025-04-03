@@ -14,8 +14,9 @@ license = "MIT"
 
 [workspace.dependencies]
 clap = { version = "4.5.34", features = ["derive"] }
-oxc = { version = "0.61.2", features = ["semantic", "codegen", "minifier", "mangler"] }
-oxc_traverse = "0.61.2"
+oxc = { version = "0.61.2", features = ["semantic", "codegen", "minifier", "mangler"], path = "/src/surplus/oxc/crates/oxc" }
+oxc_traverse = { version = "0.61.2", path = "/src/surplus/oxc/crates/oxc_traverse" }
+oxc_quote = { version = "0.61.2", path = "/src/surplus/oxc/crates/oxc_quote" }
 
 [workspace.lints.rust]
 missing_docs = "warn"
