@@ -131,7 +131,15 @@ fn main() {
 	let codegen_options = CodegenOptions {
 		minify: !args.no_minify,
 		comments: args.no_minify,
-		source_map_path: Some(std::path::PathBuf::from("surplus.js.map")),
+		source_map_path: if args.generate_sourcemaps {
+			if let Some(ref entry) = args.entry_point {
+				Some(entry.into())
+			} else {
+				Some("surplus.js.map".into())
+			}
+		} else {
+			None
+		},
 		..CodegenOptions::default()
 	};
 
