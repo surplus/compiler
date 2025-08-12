@@ -27,7 +27,9 @@ use oxc::{
 };
 use oxc_traverse::{Traverse, TraverseCtx};
 
+/// The main identifier used to refer to the Surplus package.
 const S_IDENT: &str = "__$S__";
+/// The [`S_IDENT`] as an [`Atom`].
 const S: Atom<'static> = Atom::new_const(S_IDENT);
 
 /// Return value from [`transform()`].
@@ -104,7 +106,7 @@ pub fn transform<'a>(
 		);
 	}
 
-	assert!(traverser.element_stack.is_empty());
+	debug_assert!(traverser.element_stack.is_empty());
 
 	SurplusTransformResult {
 		scoping,
@@ -112,15 +114,22 @@ pub fn transform<'a>(
 	}
 }
 
+/// Traverser for Surplus JSX elements.
 struct SurplusTraverser<'a> {
+	/// The reference to the `S` identifier
 	s_ref: ReferenceId,
+	/// Whether a transformation was performed.
 	performed_transformation: bool,
+	/// The stack of Surplus elements being processed.
 	element_stack: Vec<'a, SurplusElement<'a>>,
+	/// The underlying Bumpalo allocator.
 	allocator: &'a Allocator,
+	/// Any errors that were emitted during compilation.
 	errors: std::vec::Vec<OxcDiagnostic>,
 }
 
 impl<'a> SurplusTraverser<'a> {
+	/// Creates a new Surplus traverser using the given Bumpalo allocator.
 	fn new_in(s_ref: ReferenceId, allocator: &'a Allocator) -> Self {
 		Self {
 			s_ref,
@@ -133,6 +142,8 @@ impl<'a> SurplusTraverser<'a> {
 }
 
 impl<'a> SurplusTraverser<'a> {
+	/// Transforms the given set of statements to a Surplus computation
+	/// expression.
 	#[expect(dead_code)]
 	fn s_computation<const N: usize>(
 		&self,
@@ -178,6 +189,8 @@ impl<'a> SurplusTraverser<'a> {
 		}))
 	}
 
+	/// Transforms the given expression into a Surplus computation using an
+	/// expression arrow function.
 	fn s_expression(
 		&self,
 		ctx: &mut TraverseCtx<'a>,
@@ -230,6 +243,7 @@ impl<'a> SurplusTraverser<'a> {
 		}))
 	}
 
+	/// Helper for converting a JSX member expression to an expression.
 	fn member_to_expression(
 		&self,
 		ctx: &mut TraverseCtx<'a>,
@@ -297,9 +311,9 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 			JSXElementName::IdentifierReference(name) => {
 				name.name.chars().next().is_some_and(char::is_uppercase)
 			}
-			JSXElementName::MemberExpression(_) => true,
-			JSXElementName::NamespacedName(_) => false,
-			JSXElementName::ThisExpression(_) => true,
+			JSXElementName::MemberExpression(_)
+			| JSXElementName::NamespacedName(_)
+			| JSXElementName::ThisExpression(_) => true,
 		};
 
 		if custom_element {
@@ -447,8 +461,9 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 						nsident.name.span,
 					)
 				}
-				JSXElementName::ThisExpression(_) => unreachable!(),
-				JSXElementName::MemberExpression(_) => unreachable!(),
+				JSXElementName::ThisExpression(_) | JSXElementName::MemberExpression(_) => {
+					unreachable!()
+				}
 			};
 
 			assert!(name.chars().next().is_some_and(char::is_lowercase));
@@ -1275,11 +1290,7 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 
 	fn enter_jsx_expression(&mut self, node: &mut JSXExpression<'a>, ctx: &mut TraverseCtx<'a>) {
 		match node {
-			JSXExpression::JSXElement(_) => {
-				self.element_stack
-					.push(SurplusElement::new_in(ctx, self.allocator));
-			}
-			JSXExpression::JSXFragment(_) => {
+			JSXExpression::JSXElement(_) | JSXExpression::JSXFragment(_) => {
 				self.element_stack
 					.push(SurplusElement::new_in(ctx, self.allocator));
 			}
@@ -1352,23 +1363,39 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 	}
 }
 
+/// An identifier for a Surplus element.
 struct ElemIdent<'a> {
+	/// The name of the element, e.g. `div`, `span`, etc.
 	name: Atom<'a>,
+	/// The symbol ID of the element, used for references.
 	sym: SymbolId,
+	/// The identifier reference for the element, used for creating the element.
 	ident: Expression<'a>,
 }
+
+/// A Surplus element, which is a custom JSX element that
+/// can be transformed into a Surplus component.
 struct SurplusElement<'a> {
+	/// Whether this element is self-closing.
 	self_closing: bool,
+	/// The statements that will be executed when this element is created.
 	statements: Vec<'a, Statement<'a>>,
+	/// The element identifier, if this is a Surplus element.
 	elem: Option<ElemIdent<'a>>,
+	/// The scope in which this element is created.
 	scope: ScopeId,
+	/// The object that is constructed for this element.
 	construction_obj: Option<ObjectExpression<'a>>,
+	/// Any `fn={...}` attributes that are present on this element.
 	fn_expressions: Vec<'a, Box<'a, JSXExpressionContainer<'a>>>,
+	/// The `ref` attribute target expression, if present.
 	ref_var: Option<(Expression<'a>, Span)>,
+	/// The child expressions of this element, which are the children of the JSX element.
 	child_exprs: Vec<'a, Expression<'a>>,
 }
 
 impl<'a> SurplusElement<'a> {
+	/// Creates a new Surplus element with the given context and allocator.
 	fn new_in(ctx: &mut TraverseCtx<'a>, allocator: &'a Allocator) -> Self {
 		Self {
 			self_closing: false,
@@ -1382,6 +1409,7 @@ impl<'a> SurplusElement<'a> {
 		}
 	}
 
+	/// Converts this Surplus element into an S.js computation.
 	fn into_surplus_comp(
 		self,
 		span: Span,
@@ -1435,6 +1463,7 @@ impl<'a> SurplusElement<'a> {
 		}))
 	}
 
+	/// Converts this Surplus element into a Surplus component expression.
 	fn into_surplus(
 		self,
 		span: Span,

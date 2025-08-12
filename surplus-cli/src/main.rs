@@ -43,7 +43,7 @@ fn main() {
 	let args = Args::parse();
 
 	let source = if let Some(ref entry) = args.entry_point {
-		std::fs::read_to_string(&entry).expect("failed to read entry point")
+		std::fs::read_to_string(entry).expect("failed to read entry point")
 	} else {
 		let mut str = String::with_capacity(4096);
 		std::io::stdin()
@@ -128,10 +128,12 @@ fn main() {
 		}
 	}
 
-	let mut codegen_options = CodegenOptions::default();
-	codegen_options.minify = !args.no_minify;
-	codegen_options.comments = args.no_minify;
-	codegen_options.source_map_path = Some(std::path::PathBuf::from("surplus.js.map"));
+	let codegen_options = CodegenOptions {
+		minify: !args.no_minify,
+		comments: args.no_minify,
+		source_map_path: Some(std::path::PathBuf::from("surplus.js.map")),
+		..CodegenOptions::default()
+	};
 
 	let scoping = if args.no_minify {
 		surplus_result.scoping
@@ -143,9 +145,11 @@ fn main() {
 
 		assert!(semantic.errors.is_empty());
 
-		let mut options = MangleOptions::default();
-		options.keep_names = MangleOptionsKeepNames::all_false();
-		options.top_level = true;
+		let options = MangleOptions {
+			keep_names: MangleOptionsKeepNames::all_false(),
+			top_level: true,
+			..MangleOptions::default()
+		};
 
 		oxc::mangler::Mangler::new()
 			.with_options(options)
