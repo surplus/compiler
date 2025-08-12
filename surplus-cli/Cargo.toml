@@ -1,7 +1,7 @@
 [package]
 name = "surplus-cli"
 description = "CLI for the Surplus JSX compiler"
-version = "0.0.0"
+version = "0.0.1"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -13,7 +13,7 @@ name = "surplus"
 path = "src/main.rs"
 
 [dependencies]
-surplus = { path = "../surplus", version = "0.0.0" }
+surplus = { path = "../surplus", version = "0.0.1" }
 clap.workspace = true
 oxc.workspace = true
 
