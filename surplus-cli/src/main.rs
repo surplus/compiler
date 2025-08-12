@@ -34,12 +34,15 @@ struct Args {
 	/// The entry point of the Surplus bundle
 	/// (defaults to stdin)
 	entry_point: Option<String>,
+	/// When set, enables sourcemaps (embedded in the output).
+	#[arg(short = 'm', long = "map")]
+	generate_sourcemaps: bool,
 }
 
 fn main() {
 	let args = Args::parse();
 
-	let source = if let Some(entry) = args.entry_point {
+	let source = if let Some(ref entry) = args.entry_point {
 		std::fs::read_to_string(&entry).expect("failed to read entry point")
 	} else {
 		let mut str = String::with_capacity(4096);
@@ -128,6 +131,7 @@ fn main() {
 	let mut codegen_options = CodegenOptions::default();
 	codegen_options.minify = !args.no_minify;
 	codegen_options.comments = args.no_minify;
+	codegen_options.source_map_path = Some(std::path::PathBuf::from("surplus.js.map"));
 
 	let scoping = if args.no_minify {
 		surplus_result.scoping
@@ -152,11 +156,39 @@ fn main() {
 		.with_options(codegen_options)
 		.with_scoping(Some(scoping))
 		.build(&program);
+
+	let sourcemap_string = if args.generate_sourcemaps {
+		if let Some(ref sourcemap) = generated.map {
+			Some(sourcemap.to_data_url())
+		} else {
+			eprintln!("warning: sourcemap generation requested, but no sourcemap was generated");
+			None
+		}
+	} else {
+		None
+	};
+
 	if let Some(output) = args.output {
-		std::fs::write(output, &generated.code).expect("failed to write to output");
+		let mut fd = std::fs::File::create(&output).expect("failed to create output file");
+		fd.write_all(generated.code.as_bytes())
+			.expect("failed to write to output");
+		if let Some(sm) = sourcemap_string {
+			fd.write_all(b"//# sourceMappingURL=")
+				.expect("failed to write sourcemap URL prelude");
+			fd.write_all(sm.as_bytes())
+				.expect("failed to write sourcemap to output");
+		}
 	} else {
 		std::io::stdout()
 			.write_all(generated.code.as_bytes())
 			.expect("failed to write to stdout");
+		if let Some(sm) = sourcemap_string {
+			std::io::stdout()
+				.write_all(b"//# sourceMappingURL=")
+				.expect("failed to write sourcemap URL prelude");
+			std::io::stdout()
+				.write_all(sm.as_bytes())
+				.expect("failed to write sourcemap to stdout");
+		}
 	}
 }
