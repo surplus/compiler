@@ -1,0 +1,31 @@
+{
+	"name": "@surplus/compiler",
+	"version": "1.0.0",
+	"description": "The Surplus compiler library",
+	"main": "index.js",
+	"types": "index.d.ts",
+	"files": [
+		"index.js",
+		"index.d.ts",
+		"LICENSE.txt",
+		"surplus-wasm/pkg/"
+	],
+	"scripts": {
+		"build": "wasm-pack build --target nodejs surplus-wasm --out-name node --no-pack && rm -f surplus-wasm/pkg/.gitignore",
+		"prepublish": "pnpm build"
+	},
+	"keywords": [
+		"jsx",
+		"reactive",
+		"compiler",
+		"s.js"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/surplus/compiler.git"
+	},
+	"homepage": "https://github.com/surplus",
+	"author": "Joshua Lee Junon (https://github.com/qix-)",
+	"license": "MIT",
+	"packageManager": "pnpm@10.14.0"
+}

@@ -8,13 +8,21 @@ license.workspace = true
 repository.workspace = true
 rust-version = "1.88.0"
 
+[lib]
+path = "src/wrapper.rs"
+
 [[bin]]
 name = "surplus"
 path = "src/main.rs"
+required-features = ["clap"]
+
+[features]
+default = ["clap"]
+clap = ["dep:clap"]
 
 [dependencies]
 surplus = { path = "../surplus", version = "0.0.1" }
-clap.workspace = true
+clap = { workspace = true, optional = true }
 oxc.workspace = true
 
 [lints]

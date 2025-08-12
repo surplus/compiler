@@ -1,3 +1,4 @@
 /target
-__pycache__/
-*.pyc
+/surplus-wasm/pkg/
+node_modules/
+/*.tgz

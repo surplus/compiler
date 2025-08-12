@@ -3,7 +3,9 @@ resolver = "2"
 members = [
 	"surplus-cli",
 	"surplus",
+	"surplus-wasm",
 ]
+default-members = ["surplus-cli", "surplus"]
 
 [workspace.package]
 edition = "2024"
