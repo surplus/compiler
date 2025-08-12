@@ -18,7 +18,7 @@ use oxc::{
 #[derive(Debug, Parser)]
 struct Args {
 	/// Where to output the bundle. Defaults to
-	/// stdout; ntermediate folders must exist
+	/// stdout; intermediate folders must exist
 	#[arg(short = 'o', long = "output")]
 	output: Option<String>,
 	/// The name of the `S.js` package to import from
