@@ -12,7 +12,7 @@
 	],
 	"scripts": {
 		"build": "wasm-pack build --target nodejs surplus-wasm --out-name node --no-pack && rm -f surplus-wasm/pkg/.gitignore",
-		"prepublish": "pnpm build"
+		"prepare": "pnpm build"
 	},
 	"keywords": [
 		"jsx",
