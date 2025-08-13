@@ -43,6 +43,9 @@ pub struct Args {
 	/// The entry point of the Surplus bundle
 	/// (defaults to stdin)
 	pub entry_point: Option<String>,
+	/// Allow typescript syntax in the input
+	#[cfg_attr(feature = "clap", arg(short = 'T', long = "typescript"))]
+	pub typescript: bool,
 }
 
 /// The `Ok` result type for the [`run`] function.
@@ -73,7 +76,17 @@ pub fn run(source: String, args: &Args) -> Result<Compilation, Box<dyn std::erro
 	let mut errors = 0;
 
 	let allocator = Allocator::default();
-	let parse_result = oxc::parser::Parser::new(&allocator, &source, SourceType::jsx()).parse();
+	let parse_result = oxc::parser::Parser::new(
+		&allocator,
+		&source,
+		if args.typescript {
+			SourceType::tsx()
+		} else {
+			SourceType::jsx()
+		},
+	)
+	.parse();
+
 	if parse_result.panicked || !parse_result.errors.is_empty() {
 		if parse_result.errors.is_empty() {
 			return Err("parser panicked, but no errors were reported".into());

@@ -32,6 +32,12 @@ export interface CompileOptions {
      * @default false
      */
     minify?: boolean;
+
+	/**
+	 * Allow TypeScript syntax in the input.
+	 * @default false
+	 */
+	typescript?: boolean;
 }
 
 /**

@@ -18,6 +18,7 @@ pub fn compile_internal(
 	warnings_as_errors: bool,
 	no_minify: bool,
 	generate_sourcemaps: bool,
+	allow_typescript: bool,
 ) -> Result<CompilationResult, String> {
 	let args = surplus_cli::Args {
 		import_sjs: import_sjs.into(),
@@ -29,6 +30,7 @@ pub fn compile_internal(
 			Some(source_name.into())
 		},
 		generate_sourcemaps,
+		typescript: allow_typescript,
 	};
 
 	surplus_cli::run(source.into(), &args)
