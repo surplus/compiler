@@ -18,6 +18,7 @@ use oxc::{
 
 /// The Surplus JSX compiler.
 #[cfg_attr(feature = "clap", derive(Debug, Parser))]
+#[expect(clippy::struct_excessive_bools)]
 pub struct Args {
 	/// Where to output the bundle. Defaults to
 	/// stdout; intermediate folders must exist

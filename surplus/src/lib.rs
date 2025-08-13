@@ -47,6 +47,13 @@ pub struct SurplusTransformResult {
 	pub errors: std::vec::Vec<OxcDiagnostic>,
 }
 
+/// Helper function to decode HTML entities in a string literal.
+fn decode_html_entities<'a>(allocator: &'a Allocator, value: Atom<'a>) -> Atom<'a> {
+	let decoded = htmlentity::entity::decode(value.as_bytes()).bytes();
+	let decoded = String::from_utf8_lossy(decoded.as_ref());
+	Atom::from_in(decoded.as_ref(), allocator)
+}
+
 /// Transforms Surplus JSX in [`Program`], in-place.
 pub fn transform<'a>(
 	allocator: &'a Allocator,
@@ -1258,8 +1265,8 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 						arguments: Vec::from_array_in(
 							[Argument::StringLiteral(ctx.alloc(StringLiteral {
 								span: text.span,
-								value: text.value,
-								raw: text.raw,
+								value: decode_html_entities(self.allocator, text.value),
+								raw: None,
 								lossy: false,
 							}))],
 							self.allocator,

@@ -9,6 +9,7 @@ repository.workspace = true
 rust-version = "1.88.0"
 
 [dependencies]
+htmlentity = "1.3.2"
 oxc.workspace = true
 oxc_traverse.workspace = true
 
