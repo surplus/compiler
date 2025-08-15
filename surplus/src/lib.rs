@@ -1217,6 +1217,18 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 		}
 	}
 
+	fn enter_jsx_spread_attribute(
+		&mut self,
+		node: &mut oxc::ast::ast::JSXSpreadAttribute<'a>,
+		_ctx: &mut TraverseCtx<'a>,
+	) {
+		self.errors.push(
+			OxcDiagnostic::warn("JSX spread attributes are not yet supported in Surplus")
+				.with_label(node.span)
+				.with_help("remove the spread attribute or use a different syntax\nhttps://github.com/surplus/compiler/issues/3"),
+		);
+	}
+
 	fn enter_jsx_child(&mut self, node: &mut JSXChild<'a>, ctx: &mut TraverseCtx<'a>) {
 		if matches!(node, JSXChild::Element(_) | JSXChild::Fragment(_)) {
 			self.element_stack
