@@ -21,7 +21,7 @@
 		"s.js"
 	],
 	"peerDependencies": {
-		"@surplus/s": ">=1.0.0 && <2.0.0"
+		"@surplus/s": "^1.1.0"
 	},
 	"repository": {
 		"type": "git",
