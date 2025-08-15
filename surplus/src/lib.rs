@@ -13,10 +13,10 @@ use oxc::{
 		FunctionBody, IdentifierName, IdentifierReference, ImportDeclaration,
 		ImportDeclarationSpecifier, ImportDefaultSpecifier, ImportOrExportKind, JSXAttribute,
 		JSXAttributeName, JSXAttributeValue, JSXChild, JSXElement, JSXElementName, JSXExpression,
-		JSXExpressionContainer, JSXIdentifier, JSXMemberExpressionObject, ObjectExpression,
-		ObjectProperty, ObjectPropertyKind, ParenthesizedExpression, Program, PropertyKey,
-		PropertyKind, ReturnStatement, Statement, StaticMemberExpression, StringLiteral,
-		VariableDeclaration, VariableDeclarationKind, VariableDeclarator,
+		JSXExpressionContainer, JSXIdentifier, JSXMemberExpressionObject, JSXText,
+		ObjectExpression, ObjectProperty, ObjectPropertyKind, ParenthesizedExpression, Program,
+		PropertyKey, PropertyKind, ReturnStatement, Statement, StaticMemberExpression,
+		StringLiteral, VariableDeclaration, VariableDeclarationKind, VariableDeclarator,
 	},
 	diagnostics::OxcDiagnostic,
 	semantic::{
@@ -345,8 +345,24 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 	}
 
 	fn exit_jsx_element(&mut self, node: &mut JSXElement<'a>, ctx: &mut TraverseCtx<'a>) {
-		// Assemble the child list.
+		// Pop off any leading/trailing whitespace text nodes.
+		{
+			let child_exprs = &mut self.element_stack.last_mut().unwrap().child_exprs;
+			while child_exprs
+				.last()
+				.is_some_and(SurplusChildType::is_whitespace)
+			{
+				child_exprs.pop();
+			}
+			while child_exprs
+				.first()
+				.is_some_and(SurplusChildType::is_whitespace)
+			{
+				child_exprs.remove(0);
+			}
+		}
 
+		// Assemble the child list.
 		let child_array = ArrayExpression {
 			span: node.span,
 			elements: Vec::from_iter_in(
@@ -355,7 +371,7 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 					.unwrap()
 					.child_exprs
 					.drain(..)
-					.map(|expr| expr.into()),
+					.map(|expr| expr.unwrap().into()),
 				self.allocator,
 			),
 			trailing_comma: None,
@@ -1215,65 +1231,110 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 					.element_stack
 					.pop()
 					.expect("surplus element stack underflow");
+
+				// Removing leading/trailing whitespace from child elements
 				self.element_stack
 					.last_mut()
 					.unwrap()
 					.child_exprs
-					.push(child.into_surplus_comp(e.span, ctx, self.s_ref, self.allocator));
+					.push(SurplusChildType::Normal(child.into_surplus_comp(
+						e.span,
+						ctx,
+						self.s_ref,
+						self.allocator,
+					)));
 			}
 			JSXChild::Fragment(e) => {
 				let child = self
 					.element_stack
 					.pop()
 					.expect("surplus element stack underflow");
-				self.element_stack.last_mut().unwrap().child_exprs.push(
-					Expression::ArrayExpression(ctx.alloc(ArrayExpression {
-						span: e.span,
-						elements: Vec::from_iter_in(
-							child.child_exprs.into_iter().map(|e| e.into()),
-							self.allocator,
-						),
-						trailing_comma: None,
-					})),
-				);
+				self.element_stack
+					.last_mut()
+					.unwrap()
+					.child_exprs
+					.push(SurplusChildType::Normal(Expression::ArrayExpression(
+						ctx.alloc(ArrayExpression {
+							span: e.span,
+							elements: Vec::from_iter_in(
+								child.child_exprs.into_iter().map(|e| e.unwrap().into()),
+								self.allocator,
+							),
+							trailing_comma: None,
+						}),
+					)));
 			}
 			JSXChild::Text(text) => {
-				// Skip any purely-whitespace text.
-				if text.value.trim().is_empty() {
+				// Skip any empty text nodes.
+				if text.value.is_empty() {
 					return;
 				}
 
-				self.element_stack.last_mut().unwrap().child_exprs.push(
-					Expression::CallExpression(ctx.alloc(CallExpression {
-						span: text.span,
-						callee: Expression::StaticMemberExpression(ctx.alloc(
-							StaticMemberExpression {
+				// Handle case of multiple spaces in text nodes.
+				let (is_whitespace, text) = if text.value.chars().all(char::is_whitespace) {
+					// If we've already serviced a whitespace text node,
+					// we don't need to add another one.
+					if self
+						.element_stack
+						.last_mut()
+						.unwrap()
+						.child_exprs
+						.last()
+						.is_none_or(SurplusChildType::is_whitespace)
+					{
+						return;
+					}
+
+					(
+						true,
+						&mut Box::new_in(
+							JSXText {
 								span: text.span,
-								object: Expression::Identifier(ctx.alloc(IdentifierReference {
-									span: text.span,
-									name: Atom::new_const("document"),
-									reference_id: Cell::new(None),
-								})),
-								property: IdentifierName {
-									span: text.span,
-									name: Atom::new_const("createTextNode"),
-								},
-								optional: false,
-							},
-						)),
-						type_arguments: None,
-						arguments: Vec::from_array_in(
-							[Argument::StringLiteral(ctx.alloc(StringLiteral {
-								span: text.span,
-								value: decode_html_entities(self.allocator, text.value),
+								value: Atom::new_const(" "),
 								raw: None,
-								lossy: false,
-							}))],
+							},
 							self.allocator,
 						),
+					)
+				} else {
+					(false, text)
+				};
+
+				let expr = Expression::CallExpression(ctx.alloc(CallExpression {
+					span: text.span,
+					callee: Expression::StaticMemberExpression(ctx.alloc(StaticMemberExpression {
+						span: text.span,
+						object: Expression::Identifier(ctx.alloc(IdentifierReference {
+							span: text.span,
+							name: Atom::new_const("document"),
+							reference_id: Cell::new(None),
+						})),
+						property: IdentifierName {
+							span: text.span,
+							name: Atom::new_const("createTextNode"),
+						},
 						optional: false,
-						pure: false,
 					})),
+					type_arguments: None,
+					arguments: Vec::from_array_in(
+						[Argument::StringLiteral(ctx.alloc(StringLiteral {
+							span: text.span,
+							value: decode_html_entities(self.allocator, text.value),
+							raw: None,
+							lossy: false,
+						}))],
+						self.allocator,
+					),
+					optional: false,
+					pure: false,
+				}));
+
+				self.element_stack.last_mut().unwrap().child_exprs.push(
+					if is_whitespace {
+						SurplusChildType::Whitespace(expr)
+					} else {
+						SurplusChildType::Normal(expr)
+					},
 				);
 			}
 			JSXChild::ExpressionContainer(expr) => {
@@ -1287,7 +1348,7 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 					.last_mut()
 					.unwrap()
 					.child_exprs
-					.push(expr_sexpr);
+					.push(SurplusChildType::Normal(expr_sexpr));
 			}
 			JSXChild::Spread(_expr) => {
 				todo!("JSXChild::Spread");
@@ -1351,14 +1412,19 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 					.element_stack
 					.pop()
 					.expect("surplus element stack underflow");
-				*node = Expression::ArrayExpression(ctx.alloc(ArrayExpression {
-					span: elem.span,
-					elements: Vec::from_iter_in(
-						last_elem.child_exprs.into_iter().map(|child| child.into()),
-						self.allocator,
-					),
-					trailing_comma: None,
-				}));
+				*node = Expression::ArrayExpression(
+					ctx.alloc(ArrayExpression {
+						span: elem.span,
+						elements: Vec::from_iter_in(
+							last_elem
+								.child_exprs
+								.into_iter()
+								.map(|child| child.unwrap().into()),
+							self.allocator,
+						),
+						trailing_comma: None,
+					}),
+				);
 				self.performed_transformation = true;
 			}
 			_ => {}
@@ -1380,6 +1446,30 @@ struct ElemIdent<'a> {
 	ident: Expression<'a>,
 }
 
+/// Marker enum for identifying the contextual function lf a child expression.
+/// This is used to determine whether or not to emit filling whitespace between
+/// sibling elements.
+enum SurplusChildType<'a> {
+	/// A non-whitespace filler element.
+	Normal(Expression<'a>),
+	/// A whitespace filler element, which is used to fill gaps between elements.
+	Whitespace(Expression<'a>),
+}
+
+impl<'a> SurplusChildType<'a> {
+	/// Returns whether this child type is a whitespace filler.
+	fn is_whitespace(&self) -> bool {
+		matches!(self, SurplusChildType::Whitespace(_))
+	}
+
+	/// Converts this child type into an expression.
+	fn unwrap(self) -> Expression<'a> {
+		match self {
+			SurplusChildType::Normal(expr) | SurplusChildType::Whitespace(expr) => expr,
+		}
+	}
+}
+
 /// A Surplus element, which is a custom JSX element that
 /// can be transformed into a Surplus component.
 struct SurplusElement<'a> {
@@ -1398,7 +1488,7 @@ struct SurplusElement<'a> {
 	/// The `ref` attribute target expression, if present.
 	ref_var: Option<(Expression<'a>, Span)>,
 	/// The child expressions of this element, which are the children of the JSX element.
-	child_exprs: Vec<'a, Expression<'a>>,
+	child_exprs: Vec<'a, SurplusChildType<'a>>,
 }
 
 impl<'a> SurplusElement<'a> {
