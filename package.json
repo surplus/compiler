@@ -20,6 +20,9 @@
 		"compiler",
 		"s.js"
 	],
+	"peerDependencies": {
+		"@surplus/s": ">=1.0.0 && <2.0.0"
+	},
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/surplus/compiler.git"
