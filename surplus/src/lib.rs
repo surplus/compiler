@@ -1,6 +1,8 @@
 //! # Surplus
 //! This is the core library for the Surplus JSX compiler.
 
+pub mod constants;
+
 use std::cell::Cell;
 
 use oxc::{
@@ -27,11 +29,6 @@ use oxc::{
 	syntax::number::NumberBase,
 };
 use oxc_traverse::{Traverse, TraverseCtx};
-
-/// The main identifier used to refer to the Surplus package.
-const S_IDENT: &str = "__$S__";
-/// The [`S_IDENT`] as an [`Atom`].
-const S: Atom<'static> = Atom::new_const(S_IDENT);
 
 /// Return value from [`transform()`].
 ///
@@ -65,13 +62,13 @@ pub fn transform<'a>(
 	let unresolved_s =
 		scoping.create_reference(Reference::new(NodeId::DUMMY, ReferenceFlags::read()));
 	let mut traverser = SurplusTraverser::new_in(unresolved_s, allocator);
-	scoping.add_root_unresolved_reference(S_IDENT, unresolved_s);
+	scoping.add_root_unresolved_reference(constants::S_IDENT, unresolved_s);
 	let mut scoping = oxc_traverse::traverse_mut(&mut traverser, allocator, program, scoping);
 
 	if traverser.performed_transformation {
 		let s_sym = scoping.create_symbol(
 			Span::default(),
-			S_IDENT,
+			constants::S_IDENT,
 			SymbolFlags::Import,
 			scoping.root_scope_id(),
 			NodeId::DUMMY,
@@ -92,7 +89,7 @@ pub fn transform<'a>(
 									span: Span::empty(0),
 									local: BindingIdentifier {
 										span: Span::empty(0),
-										name: S,
+										name: constants::S,
 										symbol_id: Cell::new(Some(s_sym)),
 									},
 								},
@@ -147,9 +144,7 @@ impl<'a> SurplusTraverser<'a> {
 			errors: std::vec::Vec::new(),
 		}
 	}
-}
 
-impl<'a> SurplusTraverser<'a> {
 	/// Transforms the given set of statements to a Surplus computation
 	/// expression.
 	#[expect(dead_code)]
@@ -163,7 +158,7 @@ impl<'a> SurplusTraverser<'a> {
 			span,
 			callee: Expression::Identifier(ctx.alloc(IdentifierReference {
 				span: Span::default(),
-				name: S,
+				name: constants::S,
 				reference_id: Cell::new(Some(self.s_ref)),
 			})),
 			type_arguments: None,
@@ -209,7 +204,7 @@ impl<'a> SurplusTraverser<'a> {
 			span,
 			callee: Expression::Identifier(ctx.alloc(IdentifierReference {
 				span: Span::default(),
-				name: S,
+				name: constants::S,
 				reference_id: Cell::new(Some(self.s_ref)),
 			})),
 			type_arguments: None,
@@ -283,7 +278,7 @@ impl<'a> SurplusTraverser<'a> {
 
 impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 	fn enter_jsx_element(&mut self, node: &mut JSXElement<'a>, ctx: &mut TraverseCtx<'a>) {
-		const IDENT: &str = "__$S_ELEM__";
+		let elem_ident_str = constants::S_ELEM_IDENT;
 
 		assert!(!node.opening_element.self_closing || node.children.is_empty());
 
@@ -298,15 +293,16 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 			.map_or_else(|| node.opening_element.span, |i| i.span);
 		let ident_sym = ctx.scoping_mut().create_symbol(
 			ident_span,
-			IDENT,
+			elem_ident_str,
 			SymbolFlags::ConstVariable,
 			elem.scope,
 			NodeId::DUMMY,
 		);
-		let ident_ref = ctx.create_reference(IDENT, Some(ident_sym), ReferenceFlags::Write);
+		let ident_ref =
+			ctx.create_reference(elem_ident_str, Some(ident_sym), ReferenceFlags::Write);
 
-		let ident = Expression::Identifier(ctx.alloc(IdentifierReference {
-			name: Atom::new_const("__$S_ELEM__"),
+		let elem_ident = Expression::Identifier(ctx.alloc(IdentifierReference {
+			name: Atom::new_const(elem_ident_str),
 			span: ident_span,
 			reference_id: Cell::new(Some(ident_ref)),
 		}));
@@ -338,9 +334,9 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 		}
 
 		let old_ident = elem.elem.replace(ElemIdent {
-			ident,
+			ident: elem_ident,
 			sym: ident_sym,
-			name: Atom::new_const(IDENT),
+			name: Atom::new_const(elem_ident_str),
 		});
 		assert!(old_ident.is_none());
 	}
@@ -418,7 +414,7 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 							kind: PropertyKind::Init,
 							key: PropertyKey::Identifier(ctx.alloc(IdentifierReference {
 								span: node.span,
-								name: Atom::new_const("children"),
+								name: Atom::new_const(constants::CHILDREN),
 								reference_id: Cell::new(None),
 							})),
 							value: Expression::ArrayExpression(ctx.alloc(child_array)),
@@ -493,15 +489,15 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 			assert!(name.chars().next().is_some_and(char::is_lowercase));
 
 			let create_name = if ns.is_none() {
-				"createElement"
+				constants::CREATE_ELEMENT
 			} else {
-				"createElementNS"
+				constants::CREATE_ELEMENT_NS
 			};
 			let mut args = Vec::with_capacity_in(2, self.allocator);
-			if let Some((ns, span)) = ns {
+			if let Some((ns_val, span)) = ns {
 				args.push(Argument::StringLiteral(ctx.alloc(StringLiteral {
 					span,
-					value: ns,
+					value: ns_val,
 					raw: None,
 					lossy: false,
 				})));
@@ -522,12 +518,12 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 						span: node.span,
 						object: Expression::Identifier(ctx.alloc(IdentifierReference {
 							span: node.span,
-							name: S,
+							name: constants::S,
 							reference_id: Cell::new(Some(self.s_ref)),
 						})),
 						property: IdentifierName {
 							span: node.span,
-							name: Atom::new_const("compile"),
+							name: Atom::new_const(constants::COMPILE),
 						},
 						optional: false,
 					})),
@@ -557,7 +553,7 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 									.clone_in(self.allocator),
 								property: IdentifierName {
 									span: node.span,
-									name: Atom::new_const("replaceChildren"),
+									name: Atom::new_const(constants::REPLACE_CHILDREN),
 								},
 								optional: false,
 							}),
@@ -619,7 +615,7 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 										object: Expression::Identifier(ctx.alloc(
 											IdentifierReference {
 												span: node.span,
-												name: Atom::new_const("document"),
+												name: Atom::new_const(constants::DOCUMENT),
 												reference_id: Cell::new(None),
 											},
 										)),
@@ -858,7 +854,7 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 		// Handle edge case attributes.
 		if ns.is_none() {
 			match key.value.as_str() {
-				"fn" => {
+				constants::FN_ATTR => {
 					// Make sure the expression is actually an expression.
 					match &node.value {
 						None => {
@@ -891,7 +887,7 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 					}
 					return;
 				}
-				"ref" => {
+				constants::REF_ATTR => {
 					if let Some(value) = &node.value {
 						if let JSXAttributeValue::ExpressionContainer(expr) = value {
 							let last = self.element_stack.last_mut().unwrap().ref_var.replace((
@@ -933,7 +929,7 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 					}
 					return;
 				}
-				"children" => {
+				constants::CHILDREN => {
 					if self.element_stack.last().unwrap().self_closing {
 						todo!("`children` attribute in self-closing tag");
 					} else {
@@ -1002,13 +998,13 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 
 			let (name, remove_name) = if ns.is_some() {
 				(
-					Atom::new_const("setAttributeNS"),
-					Atom::new_const("removeAttributeNS"),
+					Atom::new_const(constants::SET_ATTRIBUTE_NS),
+					Atom::new_const(constants::REMOVE_ATTRIBUTE_NS),
 				)
 			} else {
 				(
-					Atom::new_const("setAttribute"),
-					Atom::new_const("removeAttribute"),
+					Atom::new_const(constants::SET_ATTRIBUTE),
+					Atom::new_const(constants::REMOVE_ATTRIBUTE),
 				)
 			};
 
@@ -1029,7 +1025,7 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 			let expression = if needs_computation {
 				args.push(Argument::Identifier(ctx.alloc(IdentifierReference {
 					span: node.span,
-					name: Atom::new_const("v"),
+					name: Atom::new_const(constants::V),
 					reference_id: Cell::new(None),
 				})));
 
@@ -1040,13 +1036,13 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 							span: node.span,
 							left: Expression::Identifier(ctx.alloc(IdentifierReference {
 								span: node.span,
-								name: Atom::new_const("v"),
+								name: Atom::new_const(constants::V),
 								reference_id: Cell::new(None),
 							})),
 							operator: BinaryOperator::StrictEquality,
 							right: Expression::Identifier(ctx.alloc(IdentifierReference {
 								span: node.span,
-								name: Atom::new_const("undefined"),
+								name: Atom::new_const(constants::UNDEFINED),
 								reference_id: Cell::new(None),
 							})),
 						})),
@@ -1139,7 +1135,7 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 												kind: BindingPatternKind::BindingIdentifier(
 													ctx.alloc(BindingIdentifier {
 														span: node.span,
-														name: Atom::new_const("v"),
+														name: Atom::new_const(constants::V),
 														symbol_id: Cell::new(None),
 													}),
 												),
@@ -1245,25 +1241,25 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 				)));
 		} else {
 			// DOM element: Create unique symbol for prev_keys.
-			const PREV_IDENT: &str = "__$prev_attrs__";
+			let prev_ident_str = constants::PREV_ATTRS_IDENT;
 			let prev_span = node.span;
 			let prev_sym = ctx.scoping_mut().create_symbol(
 				prev_span,
-				PREV_IDENT,
+				prev_ident_str,
 				SymbolFlags::Variable,
 				self.element_stack.last().unwrap().scope,
 				NodeId::DUMMY,
 			);
-			let prev_ident = BindingIdentifier {
+			let prev_ident_binding = BindingIdentifier {
 				span: prev_span,
-				name: Atom::new_const(PREV_IDENT),
+				name: Atom::new_const(prev_ident_str),
 				symbol_id: Cell::new(Some(prev_sym)),
 			};
 
 			let read_ref_id =
-				ctx.create_reference(PREV_IDENT, Some(prev_sym), ReferenceFlags::Read);
+				ctx.create_reference(prev_ident_str, Some(prev_sym), ReferenceFlags::Read);
 			let write_ref_id =
-				ctx.create_reference(PREV_IDENT, Some(prev_sym), ReferenceFlags::Write);
+				ctx.create_reference(prev_ident_str, Some(prev_sym), ReferenceFlags::Write);
 
 			let elem = self.element_stack.last().unwrap();
 
@@ -1282,7 +1278,7 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 							kind: VariableDeclarationKind::Let,
 							id: BindingPattern {
 								kind: BindingPatternKind::BindingIdentifier(
-									ctx.alloc(prev_ident.clone()),
+									ctx.alloc(prev_ident_binding.clone()),
 								),
 								type_annotation: None,
 								optional: false,
@@ -1299,10 +1295,10 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 			)));
 
 			// Build the inner logic for the S computation.
-			let v_ident = Atom::new_const("v");
-			let val_ident = Atom::new_const("val");
-			let new_prev_ident = Atom::new_const("new_prev");
-			let k_ident = Atom::new_const("k");
+			let v_ident = Atom::new_const(constants::V);
+			let val_ident = Atom::new_const(constants::VAL);
+			let new_prev_ident = Atom::new_const(constants::NEW_PREV);
+			let k_ident = Atom::new_const(constants::K);
 
 			// Arrow function scope.
 			let arrow_scope = ctx.create_child_scope_of_current(ScopeFlags::Arrow);
@@ -1349,306 +1345,306 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 					{
 						let for_in_scope = ctx.create_child_scope_of_current(ScopeFlags::empty());
 						Statement::ForInStatement(ctx.alloc(oxc::ast::ast::ForInStatement {
-                        span: node.span,
-                        left: oxc::ast::ast::ForStatementLeft::VariableDeclaration(ctx.alloc(VariableDeclaration {
                             span: node.span,
-                            kind: VariableDeclarationKind::Let,
-                            declare: false,
-                            declarations: Vec::from_array_in(
-                                [VariableDeclarator {
-                                    definite: false,
-                                    span: node.span,
-                                    kind: VariableDeclarationKind::Let,
-                                    id: BindingPattern {
-                                        kind: BindingPatternKind::BindingIdentifier(ctx.alloc(BindingIdentifier {
-                                            span: node.span,
-                                            name: k_ident,
-                                            symbol_id: Cell::new(None),
-                                        })),
-                                        type_annotation: None,
-                                        optional: false,
-                                    },
-                                    init: None,
-                                }],
-                                self.allocator,
-                            ),
-                        })),
-                        right: Expression::Identifier(ctx.alloc(IdentifierReference {
-                            span: node.span,
-                            name: v_ident,
-                            reference_id: Cell::new(None),
-                        })),
-                        body: Statement::BlockStatement(ctx.alloc(oxc::ast::ast::BlockStatement {
-                            span: node.span,
-                            body: Vec::from_array_in(
-                                [
-                                    // let val = v[k];
-                                    Statement::VariableDeclaration(ctx.alloc(VariableDeclaration {
+                            left: oxc::ast::ast::ForStatementLeft::VariableDeclaration(ctx.alloc(VariableDeclaration {
+                                span: node.span,
+                                kind: VariableDeclarationKind::Let,
+                                declare: false,
+                                declarations: Vec::from_array_in(
+                                    [VariableDeclarator {
+                                        definite: false,
                                         span: node.span,
                                         kind: VariableDeclarationKind::Let,
-                                        declare: false,
-                                        declarations: Vec::from_array_in(
-                                            [VariableDeclarator {
-                                                definite: false,
+                                        id: BindingPattern {
+                                            kind: BindingPatternKind::BindingIdentifier(ctx.alloc(BindingIdentifier {
                                                 span: node.span,
-                                                kind: VariableDeclarationKind::Let,
-                                                id: BindingPattern {
-                                                    kind: BindingPatternKind::BindingIdentifier(ctx.alloc(BindingIdentifier {
-                                                        span: node.span,
-                                                        name: val_ident,
-                                                        symbol_id: Cell::new(None),
-                                                    })),
-                                                    type_annotation: None,
-                                                    optional: false,
-                                                },
-                                                init: Some(Expression::ComputedMemberExpression(ctx.alloc(oxc::ast::ast::ComputedMemberExpression {
+                                                name: k_ident,
+                                                symbol_id: Cell::new(None),
+                                            })),
+                                            type_annotation: None,
+                                            optional: false,
+                                        },
+                                        init: None,
+                                    }],
+                                    self.allocator,
+                                ),
+                            })),
+                            right: Expression::Identifier(ctx.alloc(IdentifierReference {
+                                span: node.span,
+                                name: v_ident,
+                                reference_id: Cell::new(None),
+                            })),
+                            body: Statement::BlockStatement(ctx.alloc(oxc::ast::ast::BlockStatement {
+                                span: node.span,
+                                body: Vec::from_array_in(
+                                    [
+                                        // let val = v[k];
+                                        Statement::VariableDeclaration(ctx.alloc(VariableDeclaration {
+                                            span: node.span,
+                                            kind: VariableDeclarationKind::Let,
+                                            declare: false,
+                                            declarations: Vec::from_array_in(
+                                                [VariableDeclarator {
+                                                    definite: false,
                                                     span: node.span,
-                                                    object: Expression::Identifier(ctx.alloc(IdentifierReference {
-                                                        span: node.span,
-                                                        name: v_ident,
-                                                        reference_id: Cell::new(None),
-                                                    })),
-                                                    expression: Expression::Identifier(ctx.alloc(IdentifierReference {
-                                                        span: node.span,
-                                                        name: k_ident,
-                                                        reference_id: Cell::new(None),
-                                                    })),
-                                                    optional: false,
-                                                }))),
-                                            }],
-                                            self.allocator,
-                                        ),
-                                    })),
-                                    // if (val !== undefined) { elem.setAttribute(k, val); new_prev[k] = 1; } else { elem.removeAttribute(k); }
-                                    Statement::IfStatement(ctx.alloc(oxc::ast::ast::IfStatement {
-                                        span: node.span,
-                                        test: Expression::BinaryExpression(ctx.alloc(BinaryExpression {
-                                            span: node.span,
-                                            left: Expression::Identifier(ctx.alloc(IdentifierReference {
-                                                span: node.span,
-                                                name: val_ident,
-                                                reference_id: Cell::new(None),
-                                            })),
-                                            operator: BinaryOperator::StrictInequality,
-                                            right: Expression::Identifier(ctx.alloc(IdentifierReference {
-                                                span: node.span,
-                                                name: Atom::new_const("undefined"),
-                                                reference_id: Cell::new(None),
-                                            })),
-                                        })),
-                                        consequent: Statement::BlockStatement(ctx.alloc(oxc::ast::ast::BlockStatement {
-                                            span: node.span,
-                                            body: Vec::from_array_in(
-                                                [
-                                                    // elem.setAttribute(k, val);
-                                                    Statement::ExpressionStatement(ctx.alloc(ExpressionStatement {
-                                                        span: node.span,
-                                                        expression: Expression::CallExpression(ctx.alloc(CallExpression {
+                                                    kind: VariableDeclarationKind::Let,
+                                                    id: BindingPattern {
+                                                        kind: BindingPatternKind::BindingIdentifier(ctx.alloc(BindingIdentifier {
                                                             span: node.span,
-                                                            callee: Expression::StaticMemberExpression(ctx.alloc(StaticMemberExpression {
+                                                            name: val_ident,
+                                                            symbol_id: Cell::new(None),
+                                                        })),
+                                                        type_annotation: None,
+                                                        optional: false,
+                                                    },
+                                                    init: Some(Expression::ComputedMemberExpression(ctx.alloc(oxc::ast::ast::ComputedMemberExpression {
+                                                        span: node.span,
+                                                        object: Expression::Identifier(ctx.alloc(IdentifierReference {
+                                                            span: node.span,
+                                                            name: v_ident,
+                                                            reference_id: Cell::new(None),
+                                                        })),
+                                                        expression: Expression::Identifier(ctx.alloc(IdentifierReference {
+                                                            span: node.span,
+                                                            name: k_ident,
+                                                            reference_id: Cell::new(None),
+                                                        })),
+                                                        optional: false,
+                                                    }))),
+                                                }],
+                                                self.allocator,
+                                            ),
+                                        })),
+                                        // if (val !== undefined) { elem.setAttribute(k, val); new_prev[k] = 1; } else { elem.removeAttribute(k); }
+                                        Statement::IfStatement(ctx.alloc(oxc::ast::ast::IfStatement {
+                                            span: node.span,
+                                            test: Expression::BinaryExpression(ctx.alloc(BinaryExpression {
+                                                span: node.span,
+                                                left: Expression::Identifier(ctx.alloc(IdentifierReference {
+                                                    span: node.span,
+                                                    name: val_ident,
+                                                    reference_id: Cell::new(None),
+                                                })),
+                                                operator: BinaryOperator::StrictInequality,
+                                                right: Expression::Identifier(ctx.alloc(IdentifierReference {
+                                                    span: node.span,
+                                                    name: Atom::new_const(constants::UNDEFINED),
+                                                    reference_id: Cell::new(None),
+                                                })),
+                                            })),
+                                            consequent: Statement::BlockStatement(ctx.alloc(oxc::ast::ast::BlockStatement {
+                                                span: node.span,
+                                                body: Vec::from_array_in(
+                                                    [
+                                                        // elem.setAttribute(k, val);
+                                                        Statement::ExpressionStatement(ctx.alloc(ExpressionStatement {
+                                                            span: node.span,
+                                                            expression: Expression::CallExpression(ctx.alloc(CallExpression {
                                                                 span: node.span,
-                                                                object: elem.elem.as_ref().unwrap().ident.clone_in(self.allocator),
-                                                                property: IdentifierName {
+                                                                callee: Expression::StaticMemberExpression(ctx.alloc(StaticMemberExpression {
                                                                     span: node.span,
-                                                                    name: Atom::new_const("setAttribute"),
-                                                                },
+                                                                    object: elem.elem.as_ref().unwrap().ident.clone_in(self.allocator),
+                                                                    property: IdentifierName {
+                                                                        span: node.span,
+                                                                        name: Atom::new_const(constants::SET_ATTRIBUTE),
+                                                                    },
+                                                                    optional: false,
+                                                                })),
+                                                                type_arguments: None,
+                                                                arguments: Vec::from_array_in(
+                                                                    [
+                                                                        Argument::Identifier(ctx.alloc(IdentifierReference {
+                                                                            span: node.span,
+                                                                            name: k_ident,
+                                                                            reference_id: Cell::new(None),
+                                                                        })),
+                                                                        Argument::Identifier(ctx.alloc(IdentifierReference {
+                                                                            span: node.span,
+                                                                            name: val_ident,
+                                                                            reference_id: Cell::new(None),
+                                                                        })),
+                                                                    ],
+                                                                    self.allocator,
+                                                                ),
                                                                 optional: false,
+                                                                pure: false,
                                                             })),
-                                                            type_arguments: None,
-                                                            arguments: Vec::from_array_in(
-                                                                [
-                                                                    Argument::Identifier(ctx.alloc(IdentifierReference {
+                                                        })),
+                                                        // new_prev[k] = 1;
+                                                        Statement::ExpressionStatement(ctx.alloc(ExpressionStatement {
+                                                            span: node.span,
+                                                            expression: Expression::AssignmentExpression(ctx.alloc(AssignmentExpression {
+                                                                span: node.span,
+                                                                operator: AssignmentOperator::Assign,
+                                                                left: AssignmentTarget::ComputedMemberExpression(ctx.alloc(oxc::ast::ast::ComputedMemberExpression {
+                                                                    span: node.span,
+                                                                    object: Expression::Identifier(ctx.alloc(IdentifierReference {
+                                                                        span: node.span,
+                                                                        name: new_prev_ident,
+                                                                        reference_id: Cell::new(None),
+                                                                    })),
+                                                                    expression: Expression::Identifier(ctx.alloc(IdentifierReference {
                                                                         span: node.span,
                                                                         name: k_ident,
                                                                         reference_id: Cell::new(None),
                                                                     })),
-                                                                    Argument::Identifier(ctx.alloc(IdentifierReference {
+                                                                    optional: false,
+                                                                })),
+                                                                right: Expression::NumericLiteral(ctx.alloc(oxc::ast::ast::NumericLiteral {
+                                                                    span: node.span,
+                                                                    value: 1.0,
+                                                                    raw: None,
+                                                                    base: NumberBase::Decimal,
+                                                                })),
+                                                            })),
+                                                        })),
+                                                    ],
+                                                    self.allocator,
+                                                ),
+                                                scope_id: Cell::new(None),
+                                            })),
+                                            alternate: Some(Statement::BlockStatement(ctx.alloc(oxc::ast::ast::BlockStatement {
+                                                span: node.span,
+                                                body: Vec::from_array_in(
+                                                    [
+                                                        // elem.removeAttribute(k);
+                                                        Statement::ExpressionStatement(ctx.alloc(ExpressionStatement {
+                                                            span: node.span,
+                                                            expression: Expression::CallExpression(ctx.alloc(CallExpression {
+                                                                span: node.span,
+                                                                callee: Expression::StaticMemberExpression(ctx.alloc(StaticMemberExpression {
+                                                                    span: node.span,
+                                                                    object: elem.elem.as_ref().unwrap().ident.clone_in(self.allocator),
+                                                                    property: IdentifierName {
                                                                         span: node.span,
-                                                                        name: val_ident,
+                                                                        name: Atom::new_const(constants::REMOVE_ATTRIBUTE),
+                                                                    },
+                                                                    optional: false,
+                                                                })),
+                                                                type_arguments: None,
+                                                                arguments: Vec::from_array_in(
+                                                                    [Argument::Identifier(ctx.alloc(IdentifierReference {
+                                                                        span: node.span,
+                                                                        name: k_ident,
                                                                         reference_id: Cell::new(None),
-                                                                    })),
-                                                                ],
-                                                                self.allocator,
-                                                            ),
-                                                            optional: false,
-                                                            pure: false,
-                                                        })),
-                                                    })),
-                                                    // new_prev[k] = 1;
-                                                    Statement::ExpressionStatement(ctx.alloc(ExpressionStatement {
-                                                        span: node.span,
-                                                        expression: Expression::AssignmentExpression(ctx.alloc(AssignmentExpression {
-                                                            span: node.span,
-                                                            operator: AssignmentOperator::Assign,
-                                                            left: AssignmentTarget::ComputedMemberExpression(ctx.alloc(oxc::ast::ast::ComputedMemberExpression {
-                                                                span: node.span,
-                                                                object: Expression::Identifier(ctx.alloc(IdentifierReference {
-                                                                    span: node.span,
-                                                                    name: new_prev_ident,
-                                                                    reference_id: Cell::new(None),
-                                                                })),
-                                                                expression: Expression::Identifier(ctx.alloc(IdentifierReference {
-                                                                    span: node.span,
-                                                                    name: k_ident,
-                                                                    reference_id: Cell::new(None),
-                                                                })),
+                                                                    }))],
+                                                                    self.allocator,
+                                                                ),
                                                                 optional: false,
-                                                            })),
-                                                            right: Expression::NumericLiteral(ctx.alloc(oxc::ast::ast::NumericLiteral {
-                                                                span: node.span,
-                                                                value: 1.0,
-                                                                raw: None,
-                                                                base: NumberBase::Decimal,
+                                                                pure: false,
                                                             })),
                                                         })),
-                                                    })),
-                                                ],
-                                                self.allocator,
-                                            ),
-                                            scope_id: Cell::new(None),
+                                                    ],
+                                                    self.allocator,
+                                                ),
+                                                scope_id: Cell::new(None),
+                                            }))),
                                         })),
-                                        alternate: Some(Statement::BlockStatement(ctx.alloc(oxc::ast::ast::BlockStatement {
-                                            span: node.span,
-                                            body: Vec::from_array_in(
-                                                [
-                                                    // elem.removeAttribute(k);
-                                                    Statement::ExpressionStatement(ctx.alloc(ExpressionStatement {
-                                                        span: node.span,
-                                                        expression: Expression::CallExpression(ctx.alloc(CallExpression {
-                                                            span: node.span,
-                                                            callee: Expression::StaticMemberExpression(ctx.alloc(StaticMemberExpression {
-                                                                span: node.span,
-                                                                object: elem.elem.as_ref().unwrap().ident.clone_in(self.allocator),
-                                                                property: IdentifierName {
-                                                                    span: node.span,
-                                                                    name: Atom::new_const("removeAttribute"),
-                                                                },
-                                                                optional: false,
-                                                            })),
-                                                            type_arguments: None,
-                                                            arguments: Vec::from_array_in(
-                                                                [Argument::Identifier(ctx.alloc(IdentifierReference {
-                                                                    span: node.span,
-                                                                    name: k_ident,
-                                                                    reference_id: Cell::new(None),
-                                                                }))],
-                                                                self.allocator,
-                                                            ),
-                                                            optional: false,
-                                                            pure: false,
-                                                        })),
-                                                    })),
-                                                ],
-                                                self.allocator,
-                                            ),
-                                            scope_id: Cell::new(None),
-                                        }))),
-                                    })),
-                                ],
-                                self.allocator,
-                            ),
-                            scope_id: Cell::new(Some(block_scope)),
-                        })),
-                        scope_id: Cell::new(Some(for_in_scope)),
-                    }))
+                                    ],
+                                    self.allocator,
+                                ),
+                                scope_id: Cell::new(Some(block_scope)),
+                            })),
+                            scope_id: Cell::new(Some(for_in_scope)),
+                        }))
 					},
 					// for (let k in prev) { if (!(k in new_prev)) { elem.removeAttribute(k); } }
 					{
 						let for_in_scope = ctx.create_child_scope_of_current(ScopeFlags::empty());
 						Statement::ForInStatement(ctx.alloc(oxc::ast::ast::ForInStatement {
-                        span: node.span,
-                        left: oxc::ast::ast::ForStatementLeft::VariableDeclaration(ctx.alloc(VariableDeclaration {
                             span: node.span,
-                            kind: VariableDeclarationKind::Let,
-                            declare: false,
-                            declarations: Vec::from_array_in(
-                                [VariableDeclarator {
-                                    definite: false,
-                                    span: node.span,
-                                    kind: VariableDeclarationKind::Let,
-                                    id: BindingPattern {
-                                        kind: BindingPatternKind::BindingIdentifier(ctx.alloc(BindingIdentifier {
-                                            span: node.span,
-                                            name: k_ident,
-                                            symbol_id: Cell::new(None),
-                                        })),
-                                        type_annotation: None,
-                                        optional: false,
-                                    },
-                                    init: None,
-                                }],
-                                self.allocator,
-                            ),
-                        })),
-                        right: Expression::Identifier(ctx.alloc(IdentifierReference {
-                            span: node.span,
-                            name: Atom::new_const(PREV_IDENT),
-                            reference_id: Cell::new(Some(read_ref_id)),
-                        })),
-                        body: Statement::BlockStatement(ctx.alloc(oxc::ast::ast::BlockStatement {
-                            span: node.span,
-                            body: Vec::from_array_in(
-                                [Statement::IfStatement(ctx.alloc(oxc::ast::ast::IfStatement {
-                                    span: node.span,
-                                    test: Expression::UnaryExpression(ctx.alloc(oxc::ast::ast::UnaryExpression {
+                            left: oxc::ast::ast::ForStatementLeft::VariableDeclaration(ctx.alloc(VariableDeclaration {
+                                span: node.span,
+                                kind: VariableDeclarationKind::Let,
+                                declare: false,
+                                declarations: Vec::from_array_in(
+                                    [VariableDeclarator {
+                                        definite: false,
                                         span: node.span,
-                                        operator: oxc::ast::ast::UnaryOperator::LogicalNot,
-                                        argument: Expression::BinaryExpression(ctx.alloc(BinaryExpression {
-                                            span: node.span,
-                                            left: Expression::Identifier(ctx.alloc(IdentifierReference {
+                                        kind: VariableDeclarationKind::Let,
+                                        id: BindingPattern {
+                                            kind: BindingPatternKind::BindingIdentifier(ctx.alloc(BindingIdentifier {
                                                 span: node.span,
                                                 name: k_ident,
-                                                reference_id: Cell::new(None),
+                                                symbol_id: Cell::new(None),
                                             })),
-                                            operator: BinaryOperator::In,
-                                            right: Expression::Identifier(ctx.alloc(IdentifierReference {
+                                            type_annotation: None,
+                                            optional: false,
+                                        },
+                                        init: None,
+                                    }],
+                                    self.allocator,
+                                ),
+                            })),
+                            right: Expression::Identifier(ctx.alloc(IdentifierReference {
+                                span: node.span,
+                                name: Atom::new_const(constants::PREV_ATTRS_IDENT),
+                                reference_id: Cell::new(Some(read_ref_id)),
+                            })),
+                            body: Statement::BlockStatement(ctx.alloc(oxc::ast::ast::BlockStatement {
+                                span: node.span,
+                                body: Vec::from_array_in(
+                                    [Statement::IfStatement(ctx.alloc(oxc::ast::ast::IfStatement {
+                                        span: node.span,
+                                        test: Expression::UnaryExpression(ctx.alloc(oxc::ast::ast::UnaryExpression {
+                                            span: node.span,
+                                            operator: oxc::ast::ast::UnaryOperator::LogicalNot,
+                                            argument: Expression::BinaryExpression(ctx.alloc(BinaryExpression {
                                                 span: node.span,
-                                                name: new_prev_ident,
-                                                reference_id: Cell::new(None),
+                                                left: Expression::Identifier(ctx.alloc(IdentifierReference {
+                                                    span: node.span,
+                                                    name: k_ident,
+                                                    reference_id: Cell::new(None),
+                                                })),
+                                                operator: BinaryOperator::In,
+                                                right: Expression::Identifier(ctx.alloc(IdentifierReference {
+                                                    span: node.span,
+                                                    name: new_prev_ident,
+                                                    reference_id: Cell::new(None),
+                                                })),
                                             })),
                                         })),
-                                    })),
-                                    consequent: Statement::BlockStatement(ctx.alloc(oxc::ast::ast::BlockStatement {
-                                        span: node.span,
-                                        body: Vec::from_array_in(
-                                            [Statement::ExpressionStatement(ctx.alloc(ExpressionStatement {
-                                                span: node.span,
-                                                expression: Expression::CallExpression(ctx.alloc(CallExpression {
+                                        consequent: Statement::BlockStatement(ctx.alloc(oxc::ast::ast::BlockStatement {
+                                            span: node.span,
+                                            body: Vec::from_array_in(
+                                                [Statement::ExpressionStatement(ctx.alloc(ExpressionStatement {
                                                     span: node.span,
-                                                    callee: Expression::StaticMemberExpression(ctx.alloc(StaticMemberExpression {
+                                                    expression: Expression::CallExpression(ctx.alloc(CallExpression {
                                                         span: node.span,
-                                                        object: elem.elem.as_ref().unwrap().ident.clone_in(self.allocator),
-                                                        property: IdentifierName {
+                                                        callee: Expression::StaticMemberExpression(ctx.alloc(StaticMemberExpression {
                                                             span: node.span,
-                                                            name: Atom::new_const("removeAttribute"),
-                                                        },
+                                                            object: elem.elem.as_ref().unwrap().ident.clone_in(self.allocator),
+                                                            property: IdentifierName {
+                                                                span: node.span,
+                                                                name: Atom::new_const(constants::REMOVE_ATTRIBUTE),
+                                                            },
+                                                            optional: false,
+                                                        })),
+                                                        type_arguments: None,
+                                                        arguments: Vec::from_array_in(
+                                                            [Argument::Identifier(ctx.alloc(IdentifierReference {
+                                                                span: node.span,
+                                                                name: k_ident,
+                                                                reference_id: Cell::new(None),
+                                                            }))],
+                                                            self.allocator,
+                                                        ),
                                                         optional: false,
+                                                        pure: false,
                                                     })),
-                                                    type_arguments: None,
-                                                    arguments: Vec::from_array_in(
-                                                        [Argument::Identifier(ctx.alloc(IdentifierReference {
-                                                            span: node.span,
-                                                            name: k_ident,
-                                                            reference_id: Cell::new(None),
-                                                        }))],
-                                                        self.allocator,
-                                                    ),
-                                                    optional: false,
-                                                    pure: false,
-                                                })),
-                                            }))],
-                                            self.allocator,
-                                        ),
-                                        scope_id: Cell::new(None),
-                                    })),
-                                    alternate: None,
-                                }))],
-                                self.allocator,
-                            ),
-                            scope_id: Cell::new(None),
-                        })),
-                        scope_id: Cell::new(Some(for_in_scope)),
-                    }))
+                                                }))],
+                                                self.allocator,
+                                            ),
+                                            scope_id: Cell::new(None),
+                                        })),
+                                        alternate: None,
+                                    }))],
+                                    self.allocator,
+                                ),
+                                scope_id: Cell::new(None),
+                            })),
+                            scope_id: Cell::new(Some(for_in_scope)),
+                        }))
 					},
 					// prev = new_prev;
 					Statement::ExpressionStatement(ctx.alloc(ExpressionStatement {
@@ -1660,7 +1656,7 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 								left: AssignmentTarget::AssignmentTargetIdentifier(ctx.alloc(
 									IdentifierReference {
 										span: node.span,
-										name: Atom::new_const(PREV_IDENT),
+										name: Atom::new_const(constants::PREV_ATTRS_IDENT),
 										reference_id: Cell::new(Some(write_ref_id)),
 									},
 								)),
@@ -1812,7 +1808,7 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 				}
 
 				// Handle case of multiple spaces in text nodes.
-				let (is_whitespace, text) = if text.value.chars().all(char::is_whitespace) {
+				let is_whitespace = if text.value.chars().all(char::is_whitespace) {
 					// If we've already serviced a whitespace text node,
 					// we don't need to add another one.
 					if self
@@ -1826,19 +1822,17 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 						return;
 					}
 
-					(
-						true,
-						&mut Box::new_in(
-							JSXText {
-								span: text.span,
-								value: Atom::new_const(" "),
-								raw: None,
-							},
-							self.allocator,
-						),
-					)
+					*text = Box::new_in(
+						JSXText {
+							span: text.span,
+							value: Atom::new_const(" "),
+							raw: None,
+						},
+						self.allocator,
+					);
+					true
 				} else {
-					(false, text)
+					false
 				};
 
 				let expr = Expression::CallExpression(ctx.alloc(CallExpression {
@@ -1847,12 +1841,12 @@ impl<'a> Traverse<'a> for SurplusTraverser<'a> {
 						span: text.span,
 						object: Expression::Identifier(ctx.alloc(IdentifierReference {
 							span: text.span,
-							name: Atom::new_const("document"),
+							name: Atom::new_const(constants::DOCUMENT),
 							reference_id: Cell::new(None),
 						})),
 						property: IdentifierName {
 							span: text.span,
-							name: Atom::new_const("createTextNode"),
+							name: Atom::new_const(constants::CREATE_TEXT_NODE),
 						},
 						optional: false,
 					})),
@@ -2094,7 +2088,7 @@ impl<'a> SurplusElement<'a> {
 			span,
 			type_arguments: None,
 			callee: Expression::Identifier(ctx.alloc(IdentifierReference {
-				name: S,
+				name: constants::S,
 				span: Span::default(),
 				reference_id: Cell::new(Some(s_ref)),
 			})),
