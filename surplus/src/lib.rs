@@ -2,22 +2,19 @@
 //! This is the core library for the Surplus JSX compiler.
 
 pub(crate) mod constants;
-pub(crate) mod traverser;
 pub(crate) mod element;
+pub(crate) mod traverser;
 
 use std::cell::Cell;
 
 use oxc::{
 	allocator::{Allocator, Box, FromIn, Vec},
 	ast::ast::{
-		BindingIdentifier,
-		ImportDeclaration, ImportDeclarationSpecifier, ImportDefaultSpecifier, ImportOrExportKind, Program, Statement,
-		StringLiteral,
+		BindingIdentifier, ImportDeclaration, ImportDeclarationSpecifier, ImportDefaultSpecifier,
+		ImportOrExportKind, Program, Statement, StringLiteral,
 	},
 	diagnostics::OxcDiagnostic,
-	semantic::{
-		NodeId, Reference, ReferenceFlags, Scoping, SymbolFlags,
-	},
+	semantic::{NodeId, Reference, ReferenceFlags, Scoping, SymbolFlags},
 	span::{Atom, Span},
 };
 

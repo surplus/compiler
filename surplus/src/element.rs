@@ -1,18 +1,17 @@
+use std::cell::Cell;
+
 use oxc::{
 	allocator::{Allocator, Box, Vec},
 	ast::ast::{
-		Argument, ArrowFunctionExpression, CallExpression, Expression,
-		FormalParameterKind, FormalParameters, FunctionBody, IdentifierReference,
-		JSXExpressionContainer, ObjectExpression, ParenthesizedExpression, Statement,
+		Argument, ArrowFunctionExpression, CallExpression, Expression, FormalParameterKind,
+		FormalParameters, FunctionBody, IdentifierReference, JSXExpressionContainer,
+		ObjectExpression, ParenthesizedExpression, Statement,
 	},
-	semantic::{
-		ReferenceId, ScopeFlags, ScopeId,
-		SymbolId,
-	},
+	semantic::{ReferenceId, ScopeFlags, ScopeId, SymbolId},
 	span::{Atom, Span},
 };
 use oxc_traverse::TraverseCtx;
-use std::cell::Cell;
+
 use crate::constants::S;
 
 /// An identifier for a Surplus element.
@@ -24,7 +23,6 @@ pub struct ElemIdent<'a> {
 	/// The identifier reference for the element, used for creating the element.
 	pub ident: Expression<'a>,
 }
-
 
 /// Marker enum for identifying the contextual function lf a child expression.
 /// This is used to determine whether or not to emit filling whitespace between
