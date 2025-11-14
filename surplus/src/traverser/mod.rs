@@ -1,3 +1,8 @@
+mod enter_jsx_element;
+mod exit_jsx_attribute;
+mod exit_jsx_child;
+mod exit_jsx_element;
+mod exit_jsx_spread_attribute;
 mod oxc_impl;
 
 use std::cell::Cell;
