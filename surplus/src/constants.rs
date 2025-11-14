@@ -1,4 +1,3 @@
-#![expect(missing_docs)]
 use oxc::span::Atom;
 
 pub const S_IDENT: &str = "__$S__";
