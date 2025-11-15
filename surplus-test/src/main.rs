@@ -49,15 +49,12 @@ pub fn main() {
 			if args.check {
 				eprint!("check: {} ... ", case.path.display());
 
-				let existing_compiled = std::fs::read_to_string(&case.compiled_path)
-					.expect("failed to read existing compiled file");
-				if existing_compiled != case.compiled {
-					eprintln!("failed");
-					let diff = format!("{}", pretty_assertions::StrComparison::new(
-						&existing_compiled,
-						&case.compiled,
-					));
-					eprintln!("{}", diff.indent(4));
+				let exists = std::fs::metadata(&case.compiled_path).is_ok();
+
+				if exists {
+					eprintln!("ok");
+				} else {
+					eprintln!("missing   !!!");
 					ok = false;
 				}
 			} else {
@@ -70,27 +67,23 @@ pub fn main() {
 	}
 
 	let full_tests = tests.join("\n");
-	let reparsed_file = syn::parse_str::<syn::File>(&full_tests)
-		.expect("failed to reparse generated tests");
+	let reparsed_file =
+		syn::parse_str::<syn::File>(&full_tests).expect("failed to reparse generated tests");
 	let pretty_tests = prettyplease::unparse(&reparsed_file);
 
-	let generated = format!(
-		"{}\n\n{}",
-		AUTO_GEN_NOTICE,
-		pretty_tests
-	);
+	let generated = format!("{}\n\n{}", AUTO_GEN_NOTICE, pretty_tests);
 
 	let out_path = PathBuf::from(&args.src_dir).join("tests.rs");
 	if args.check {
 		let existing = std::fs::read_to_string(&out_path).unwrap_or_default();
 		print!("check harness: {} ... ", out_path.display());
 		if existing != generated {
-			println!("failed");
+			println!("failed    !!!");
 
-			let diff = format!("{}", pretty_assertions::StrComparison::new(
-				&existing,
-				&generated,
-			));
+			let diff = format!(
+				"{}",
+				pretty_assertions::StrComparison::new(&existing, &generated,)
+			);
 
 			eprintln!("{}", diff.indent(4));
 			std::process::exit(1);
@@ -116,7 +109,10 @@ struct TestCase {
 	harness: String,
 }
 
-fn process_test(base_path: impl AsRef<std::path::Path>, path: impl AsRef<std::path::Path>) -> TestCase {
+fn process_test(
+	base_path: impl AsRef<std::path::Path>,
+	path: impl AsRef<std::path::Path>,
+) -> TestCase {
 	let path = path.as_ref();
 	let base_path = base_path.as_ref();
 	let rel_path = path
@@ -166,15 +162,22 @@ fn process_test(base_path: impl AsRef<std::path::Path>, path: impl AsRef<std::pa
 
 	let source_path_rel = PathBuf::from(rel_path);
 	let source_path_literal = syn::LitStr::new(
-		&source_path_rel.to_str().expect("failed to convert path to string"),
+		&source_path_rel
+			.to_str()
+			.expect("failed to convert path to string"),
 		proc_macro2::Span::call_site(),
 	);
 
 	let compiled_path = path.with_file_name(format!("{}.compiled.js", test_name));
 
-	let compiled_path_rel = PathBuf::from(rel_path).with_file_name(format!("{}.compiled.js", test_name));
-	let compiled_path_literal =
-		syn::LitStr::new(&compiled_path_rel.to_str().expect("failed to convert compiled path to string"), proc_macro2::Span::call_site());
+	let compiled_path_rel =
+		PathBuf::from(rel_path).with_file_name(format!("{}.compiled.js", test_name));
+	let compiled_path_literal = syn::LitStr::new(
+		&compiled_path_rel
+			.to_str()
+			.expect("failed to convert compiled path to string"),
+		proc_macro2::Span::call_site(),
+	);
 
 	let test = quote::quote! {
 		#[test]

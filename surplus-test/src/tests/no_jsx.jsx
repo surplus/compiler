@@ -3,3 +3,4 @@ let bar = 20;
 let weird = foo + bar;
 
 export default () => weird;
+export const FOO = "bar";
