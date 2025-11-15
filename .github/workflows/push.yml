@@ -1,0 +1,78 @@
+name: Test
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+env:
+  RUST_BACKTRACE: full
+
+jobs:
+  lint-rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+      - uses: ./.github/actions/rust
+      - name: Lint (rustfmt)
+        run: cargo +nightly fmt --check
+  lint-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+      - uses: ./.github/actions/rust
+      - name: Lint (surplus-test)
+        run: cargo run -p surplus-test -- --check
+  lint-clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+      - uses: ./.github/actions/rust
+      - name: Lint (clippy)
+        run: cargo clippy --all-targets --all-features -- -D clippy::all
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+      - uses: ./.github/actions/rust
+      - name: Test
+        run: cargo test --all-features
+  build-debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+      - uses: ./.github/actions/rust
+      - name: Build (debug)
+        run: cargo build --all-features
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+      - uses: ./.github/actions/rust
+      - name: Build (release)
+        run: cargo build --release --all-features
+  build-wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+      - uses: ./.github/actions/rust
+      - name: Install wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+      - name: Build (wasm)
+        run: pnpm install && pnpm build
