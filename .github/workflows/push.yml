@@ -74,5 +74,7 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
       - name: Install wasm-pack
         run: cargo install wasm-pack
+      - name: Install pnpm
+        run: npm install -g pnpm
       - name: Build (wasm)
         run: pnpm install && pnpm build
