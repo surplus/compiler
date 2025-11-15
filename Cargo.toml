@@ -4,8 +4,9 @@ members = [
 	"surplus-cli",
 	"surplus",
 	"surplus-wasm",
+	"surplus-test",
 ]
-default-members = ["surplus-cli", "surplus"]
+default-members = ["surplus-cli", "surplus", "surplus-test"]
 
 [workspace.package]
 edition = "2024"
@@ -19,6 +20,11 @@ repository = "https://github.com/surplus/compiler.git"
 clap = { version = "4.5.34", features = ["derive"] }
 oxc = { version = "0.61.2", features = ["semantic", "codegen", "minifier", "mangler"] }
 oxc_traverse = "0.61.2"
+syn = { version = "2.0.110", features = ["full"] }
+proc-macro2 = "1.0.103"
+quote = "1.0.42"
+prettyplease = "0.2.37"
+pretty_assertions = "1.4.1"
 
 [workspace.lints.rust]
 missing_docs = "warn"
