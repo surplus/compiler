@@ -8,3 +8,8 @@ runs:
       with:
         toolchain: stable
         components: rustfmt, clippy, rustc-dev, rust-src, llvm-tools-preview
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: nightly
+        components: rustfmt, clippy, rustc-dev, rust-src, llvm-tools-preview
