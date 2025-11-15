@@ -1,3 +1,5 @@
+//! Traverser implementation for Surplus JSX transformations.
+#![allow(clippy::missing_docs_in_private_items)]
 mod enter_jsx_element;
 mod exit_jsx_attribute;
 mod exit_jsx_child;

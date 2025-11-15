@@ -1,3 +1,5 @@
+//! Holds constant string values used throughout the Surplus compiler.
+#![allow(clippy::missing_docs_in_private_items)]
 use oxc::span::Atom;
 
 pub const S_IDENT: &str = "__$S__";

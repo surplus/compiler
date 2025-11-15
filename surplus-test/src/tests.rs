@@ -2,8 +2,8 @@
 
 #[test]
 fn r#empty() {
-    const SOURCE: &'static str = include_str!("tests/empty.jsx");
-    const COMPILED: &'static str = include_str!("tests/empty.compiled.js");
+    const SOURCE: &str = include_str!("tests/empty.jsx");
+    const COMPILED: &str = include_str!("tests/empty.compiled.js");
     let result = surplus_cli::run(
             SOURCE.to_string(),
             &surplus_cli::Args {
@@ -28,8 +28,8 @@ fn r#empty() {
 }
 #[test]
 fn r#no_jsx() {
-    const SOURCE: &'static str = include_str!("tests/no_jsx.jsx");
-    const COMPILED: &'static str = include_str!("tests/no_jsx.compiled.js");
+    const SOURCE: &str = include_str!("tests/no_jsx.jsx");
+    const COMPILED: &str = include_str!("tests/no_jsx.compiled.js");
     let result = surplus_cli::run(
             SOURCE.to_string(),
             &surplus_cli::Args {

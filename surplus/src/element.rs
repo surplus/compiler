@@ -1,3 +1,4 @@
+//! Defines data structures and utilities for Surplus elements used in JSX transformation.
 use std::cell::Cell;
 
 use oxc::{
