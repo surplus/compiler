@@ -12,7 +12,7 @@ use oxc::{
 	},
 	diagnostics::OxcDiagnostic,
 	semantic::ReferenceFlags,
-	span::Atom,
+	span::{Atom, Span},
 };
 use oxc_traverse::TraverseCtx;
 
@@ -21,6 +21,7 @@ use crate::{
 		CHILDREN, COMPILE, CREATE_ELEMENT, CREATE_ELEMENT_NS, DOCUMENT, REPLACE_CHILDREN, S,
 	},
 	element::SurplusChildType,
+	tag_ns::tag_ns,
 };
 
 impl<'a> super::SurplusTraverser<'a> {
@@ -76,7 +77,21 @@ impl<'a> super::SurplusTraverser<'a> {
 				JSXElementName::IdentifierReference(ident) => {
 					Expression::Identifier(ident.clone_in(self.allocator))
 				}
-				JSXElementName::NamespacedName(_) => unreachable!(),
+				JSXElementName::NamespacedName(nsident) => {
+					self.errors.push(
+						OxcDiagnostic::error("Namespaced JSX elements are not supported")
+							.with_label(nsident.span)
+							.with_help("consider using a custom element or removing the namespace"),
+					);
+					Expression::Identifier(Box::from_in(
+						IdentifierReference {
+							span: nsident.name.span,
+							name: nsident.name.name,
+							reference_id: Cell::new(None),
+						},
+						self.allocator,
+					))
+				}
 				JSXElementName::ThisExpression(member) => {
 					Expression::ThisExpression(member.clone_in(self.allocator))
 				}
@@ -155,19 +170,26 @@ impl<'a> super::SurplusTraverser<'a> {
 		} else {
 			// Otherwise, create the element and stick it first in the statements list.
 			let (ns, name, name_span) = match &node.opening_element.name {
-				JSXElementName::Identifier(ident) => (None, ident.name, ident.span),
-				JSXElementName::IdentifierReference(ident) => (None, ident.name, ident.span),
+				JSXElementName::Identifier(ident) => {
+					(tag_ns(ident.name.as_str()), ident.name, ident.span)
+				}
+				JSXElementName::IdentifierReference(ident) => {
+					(tag_ns(ident.name.as_str()), ident.name, ident.span)
+				}
 				JSXElementName::NamespacedName(nsident) => {
-					(
-						Some((nsident.namespace.name, nsident.namespace.span)),
-						nsident.name.name,
-						nsident.name.span,
-					)
+					self.errors.push(
+						OxcDiagnostic::error("Namespaced JSX elements are not supported")
+							.with_label(nsident.span)
+							.with_help("consider using a custom element or removing the namespace"),
+					);
+					(None, nsident.name.name, nsident.name.span)
 				}
 				JSXElementName::ThisExpression(_) | JSXElementName::MemberExpression(_) => {
 					unreachable!()
 				}
 			};
+
+			let ns = ns.map(|ns| (ns, Span::default()));
 
 			assert!(name.chars().next().is_some_and(char::is_lowercase));
 

@@ -1,0 +1,4 @@
+doc-valid-idents = [
+	"..", # Include the built-in valid idents list
+	"MathML",
+]

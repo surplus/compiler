@@ -3,6 +3,7 @@
 
 pub(crate) mod constants;
 pub(crate) mod element;
+pub(crate) mod tag_ns;
 pub(crate) mod traverser;
 
 use std::cell::Cell;
