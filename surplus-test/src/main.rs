@@ -83,9 +83,6 @@ pub fn main() {
 
 		if path.extension().and_then(|s| s.to_str()) == Some("jsx") {
 			let case = process_test(&args.src_dir, &path);
-			tests.push(case.harness);
-
-			seen_generated.insert(case.compiled_path.clone());
 
 			if args.check {
 				eprint!("check: {} ... ", case.path.display());
@@ -104,6 +101,9 @@ pub fn main() {
 
 				println!("generate: {} ... ok", case.path.display());
 			}
+
+			seen_generated.insert(case.compiled_path.clone());
+			tests.push(case);
 		}
 	}
 
@@ -120,7 +120,15 @@ pub fn main() {
 		}
 	}
 
-	let full_tests = tests.join("\n");
+	// Sort the tests by name. Some systems will report directory entries
+	// in different orders, causing `--check` to fail spuriously.
+	tests.sort_by_key(|t| t.name.clone());
+
+	let full_tests = tests
+		.into_iter()
+		.map(|t| t.harness.clone())
+		.collect::<Vec<_>>()
+		.join("\n");
 	let reparsed_file =
 		syn::parse_str::<syn::File>(&full_tests).expect("failed to reparse generated tests");
 	let pretty_tests = prettyplease::unparse(&reparsed_file);
@@ -158,6 +166,8 @@ pub fn main() {
 
 /// A generated test case from a source file.
 struct TestCase {
+	/// The name of the test case.
+	name: String,
 	/// The path to the source file.
 	path: PathBuf,
 	/// The path to the compiled output file.
@@ -267,6 +277,7 @@ fn process_test(
 	.to_string();
 
 	TestCase {
+		name: test_name.to_string(),
 		path: path.to_path_buf(),
 		compiled_path,
 		compiled,
