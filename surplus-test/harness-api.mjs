@@ -9,7 +9,7 @@ const valueOf = (v) => typeof v?.valueOf === 'function' ? v.valueOf() : v;
 const toString = (v) => typeof v?.toString === 'function' ? v.toString() : Object.prototype.toString.call(v);
 const valueToString = (v) => toString(valueOf(v));
 
-Array.prototype.is = (o) => {
+Array.prototype.is = function(o) {
 	if (!Array.isArray(o)) throw new Error(`.is() argument is not an array`);
 	if (this.length !== o.length) {
 		throw new Error(`.is() array length mismatch: expected ${o.length}, got ${this.length}`);
@@ -196,4 +196,10 @@ Element.prototype.hasText = function(substring) {
 	if (!text.includes(valueToString(substring))) {
 		throw new Error(`.hasText() text does not contain "${substring}": got "${text}"`);
 	}
+}
+
+SVGElement.prototype.click = function() {
+	// SVG elements don't have a native click() method, so use dispatchEvent
+	this.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+	return this;
 }
