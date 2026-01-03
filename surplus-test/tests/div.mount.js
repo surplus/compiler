@@ -1,3 +1,2 @@
-$("*").length.is(1);
-$("div").length.is(1);
-$("div").only().text().is("Hello, world!");
+$('*').only().isTag('div');
+$('div').only().text().is('Hello, world!');
