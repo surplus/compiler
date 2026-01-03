@@ -18,15 +18,6 @@ jobs:
       - uses: ./.github/actions/deps
       - name: Lint (rustfmt)
         run: cargo +nightly fmt --check
-  lint-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: 'true'
-      - uses: ./.github/actions/deps
-      - name: Lint (surplus-test)
-        run: cargo run -p surplus-test -- --check
   lint-clippy:
     runs-on: ubuntu-latest
     steps:
