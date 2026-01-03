@@ -118,3 +118,16 @@ import S from '@surplus/s';
 ```
 
 No other imports are allowed, and will error if attempted.
+
+## Broken suites/cases and Ignoring Them
+
+If a test case is worthwhile to keep tracked and tested against
+(e.g. for TDD purposes) -- which should be an _infrequent_ case --
+this can be done by prefixing the _entire_ file with a single underscore.
+
+This will annotate either the individual test case, or all test cases
+in the suite, with `#[ignored]`. Under a normal `cargo test`, these tests
+do not affect the overall test result (including in Surplus's CI/CD pipeline)
+but can be selectively enabled via `cargo test -- --ignored`.
+
+To re-enable it, remove the leading underscore.

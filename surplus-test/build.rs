@@ -11,7 +11,14 @@ use quote::quote;
 #[derive(Debug)]
 struct TestSuite {
 	jsx_file: Option<PathBuf>,
-	cases: HashMap<String, PathBuf>,
+	cases: HashMap<String, TestCase>,
+	skipped: bool,
+}
+
+#[derive(Debug)]
+struct TestCase {
+	js_file: PathBuf,
+	skipped: bool,
 }
 
 fn main() {
@@ -47,9 +54,23 @@ fn main() {
 
 		let mut tests = vec![];
 
-		for (case_name, case_path) in suite.cases {
-			let js_src = std::fs::read_to_string(&case_path).unwrap_or_else(|_| {
-				panic!("Failed to read JS test-case file: {}", case_path.display())
+		for (case_name, case) in suite.cases {
+			let ignored_attr = if suite.skipped || case.skipped {
+				let reason = if suite.skipped {
+					"entire test suite skipped (filename starts with underscore)"
+				} else {
+					"test case skipped (filename starts with underscore)"
+				};
+				Some(quote! { #[ignore = #reason] })
+			} else {
+				None
+			};
+
+			let js_src = std::fs::read_to_string(&case.js_file).unwrap_or_else(|_| {
+				panic!(
+					"Failed to read JS test-case file: {}",
+					case.js_file.display()
+				)
 			});
 
 			let test_fn_name = syn::Ident::new(&case_name, cs());
@@ -60,10 +81,11 @@ fn main() {
 				.to_string_lossy()
 				.to_string();
 
-			let case_path_str = case_path.to_string_lossy().to_string();
+			let case_path_str = case.js_file.to_string_lossy().to_string();
 
 			tests.push(quote! {
 				#[test]
+				#ignored_attr
 				fn #test_fn_name() {
 					const CASE_SRC: &str = #js_src;
 
@@ -205,17 +227,23 @@ fn discover_suites() -> HashMap<String, TestSuite> {
 			);
 			println!("-- discovered suite: {suite_name}");
 
-			if let Some(existing) = suites
-				.entry(suite_name.to_string())
-				.or_insert_with(|| {
-					TestSuite {
-						jsx_file: None,
-						cases: HashMap::new(),
-					}
-				})
-				.jsx_file
-				.replace(path.clone())
-			{
+			let (suite_name, skipped) = if let Some(suite_name) = suite_name.strip_prefix("_") {
+				(suite_name, true)
+			} else {
+				(suite_name, false)
+			};
+
+			let entry = suites.entry(suite_name.to_string()).or_insert_with(|| {
+				TestSuite {
+					jsx_file: None,
+					cases: HashMap::new(),
+					skipped: false,
+				}
+			});
+
+			entry.skipped = entry.skipped || skipped;
+
+			if let Some(existing) = entry.jsx_file.replace(path.clone()) {
 				panic!(
 					"Duplicate suite name found: {suite_name} ({} and {})",
 					existing.display(),
@@ -242,16 +270,30 @@ fn discover_suites() -> HashMap<String, TestSuite> {
 				"Case name is not a valid Rust identifier: {case_name}"
 			);
 
+			let (case_name, skipped) = if let Some(case_name) = case_name.strip_prefix("_") {
+				(case_name, true)
+			} else {
+				(case_name, false)
+			};
+
 			suites
 				.entry(suite_name.to_string())
 				.or_insert_with(|| {
 					TestSuite {
 						jsx_file: None,
 						cases: HashMap::new(),
+						skipped: false,
 					}
 				})
 				.cases
-				.insert(case_name.to_string(), path);
+				.insert(
+					case_name.to_string(),
+					TestCase {
+						js_file: path,
+						skipped,
+					},
+				)
+				.expect_none("Duplicate test case name found");
 		} else {
 			panic!("Invalid file in tests/ folder: {filename}");
 		}
@@ -284,4 +326,14 @@ fn is_valid_rust_identifier(name: &str) -> bool {
 		}
 	}
 	true
+}
+
+trait OptionExt {
+	fn expect_none(self, msg: &str);
+}
+
+impl<T> OptionExt for Option<T> {
+	fn expect_none(self, msg: &str) {
+		assert!(self.is_none(), "{}", msg);
+	}
 }
