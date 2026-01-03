@@ -17,3 +17,6 @@ runs:
       uses: actions/setup-node@v5
       with:
         node-version: '>=22.21.1'
+    - name: Install pnpm
+      shell: bash
+      run: npm i -g pnpm
