@@ -10,7 +10,7 @@ use quote::quote;
 
 #[derive(Debug)]
 struct TestSuite {
-	jsx_file: PathBuf,
+	jsx_file: Option<PathBuf>,
 	cases: HashMap<String, PathBuf>,
 }
 
@@ -27,18 +27,23 @@ fn main() {
 		.expect("Failed to run 'npm install'");
 
 	let suites = discover_suites();
+
+	// Printed if the build script fails.
+	println!("test suites: {suites:#?}");
+
 	let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
 	let dest_path = out_dir.join("tests.rs");
 
 	let mut file = std::fs::File::create(dest_path).unwrap();
 
 	for (suite_name, suite) in suites {
-		let jsx_src = std::fs::read_to_string(&suite.jsx_file).unwrap_or_else(|_| {
-			panic!(
-				"Failed to read JSX fixture file: {}",
-				suite.jsx_file.display()
-			)
-		});
+		let jsx_src =
+			std::fs::read_to_string(suite.jsx_file.as_ref().unwrap()).unwrap_or_else(|_| {
+				panic!(
+					"Failed to read JSX fixture file: {}",
+					suite.jsx_file.as_ref().unwrap().display()
+				)
+			});
 
 		let mut tests = vec![];
 
@@ -48,7 +53,12 @@ fn main() {
 			});
 
 			let test_fn_name = syn::Ident::new(&case_name, cs());
-			let suite_path = suite.jsx_file.to_string_lossy().to_string();
+			let suite_path = suite
+				.jsx_file
+				.as_ref()
+				.unwrap()
+				.to_string_lossy()
+				.to_string();
 
 			let case_path_str = case_path.to_string_lossy().to_string();
 
@@ -173,38 +183,56 @@ fn discover_suites() -> HashMap<String, TestSuite> {
 	// 6. Panic on any filenames that do not match the above patterns.
 	// 7. Suite names and test case names must be valid Rust identifiers,
 	//    and must be snake case. Panic if not.
-	let mut suites = HashMap::new();
+	let mut suites = HashMap::<String, TestSuite>::new();
 	let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 	let tests_dir = PathBuf::from(manifest_dir).join("tests");
+
 	for entry in std::fs::read_dir(tests_dir).unwrap() {
 		let entry = entry.unwrap();
 		let path = entry.path();
+		println!("-- evaluating entry: {}", path.display());
 		assert!(
 			!path.is_dir(),
 			"Directories are not allowed in the tests/ folder: {}",
 			path.display()
 		);
 		let filename = path.file_name().unwrap().to_string_lossy();
+		println!("-- filename: {filename}");
 		if let Some(suite_name) = filename.strip_suffix(".jsx") {
 			assert!(
 				is_valid_rust_identifier(suite_name),
 				"Suite name is not a valid Rust identifier: {suite_name}"
 			);
-			suites.insert(
-				suite_name.to_string(),
-				TestSuite {
-					jsx_file: path,
-					cases: HashMap::new(),
-				},
-			);
+			println!("-- discovered suite: {suite_name}");
+
+			if let Some(existing) = suites
+				.entry(suite_name.to_string())
+				.or_insert_with(|| {
+					TestSuite {
+						jsx_file: None,
+						cases: HashMap::new(),
+					}
+				})
+				.jsx_file
+				.replace(path.clone())
+			{
+				panic!(
+					"Duplicate suite name found: {suite_name} ({} and {})",
+					existing.display(),
+					path.display()
+				);
+			}
 		} else if let Some(suite_pair) = filename.strip_suffix(".js") {
+			println!("-- discovered potential case: {suite_pair}");
 			let parts: Vec<&str> = suite_pair.rsplitn(2, '.').collect();
+			println!("-- discovered case parts: {parts:?}");
 			assert!(
 				parts.len() == 2,
 				"Test case filename does not match pattern <suite>.<case>.js: {filename}"
 			);
 			let case_name = parts[0];
 			let suite_name = parts[1];
+			println!("-- suite_name: {suite_name}, case_name: {case_name}");
 			assert!(
 				is_valid_rust_identifier(suite_name),
 				"Suite name is not a valid Rust identifier: {suite_name}"
@@ -213,20 +241,34 @@ fn discover_suites() -> HashMap<String, TestSuite> {
 				is_valid_rust_identifier(case_name),
 				"Case name is not a valid Rust identifier: {case_name}"
 			);
-			let suite = suites.get_mut(suite_name).unwrap_or_else(|| {
-				panic!("Test case '{case_name}' has no matching suite '{suite_name}'")
-			});
-			suite.cases.insert(case_name.to_string(), path);
+
+			suites
+				.entry(suite_name.to_string())
+				.or_insert_with(|| {
+					TestSuite {
+						jsx_file: None,
+						cases: HashMap::new(),
+					}
+				})
+				.cases
+				.insert(case_name.to_string(), path);
 		} else {
 			panic!("Invalid file in tests/ folder: {filename}");
 		}
 	}
+
 	for (suite_name, suite) in &suites {
+		assert!(
+			suite.jsx_file.is_some(),
+			"Test suite '{suite_name}' has no corresponding .jsx fixture file"
+		);
+
 		assert!(
 			!suite.cases.is_empty(),
 			"Suite '{suite_name}' has no test cases"
 		);
 	}
+
 	suites
 }
 
