@@ -129,6 +129,19 @@ impl<'a> super::SurplusTraverser<'a> {
 			}
 		};
 
+		// Handle event namespace (on:eventname)
+		if let Some(ns_lit) = &ns
+			&& ns_lit.value.as_str() == crate::constants::EVENT_NS
+		{
+			// Store event handler for processing in exit_jsx_element
+			self.element_stack
+				.last_mut()
+				.unwrap()
+				.event_handlers
+				.push((key.value, value, node.span));
+			return;
+		}
+
 		// Handle edge case attributes.
 		if ns.is_none() {
 			match key.value.as_str() {

@@ -259,7 +259,12 @@ fn discover_suites() -> HashMap<String, TestSuite> {
 				"Test case filename does not match pattern <suite>.<case>.js: {filename}"
 			);
 			let case_name = parts[0];
-			let suite_name = parts[1];
+			let (suite_name, suite_ignored) = if let Some(suite_name) = parts[1].strip_prefix("_") {
+				(suite_name, true)
+			} else {
+				(parts[1], false)
+			};
+
 			println!("-- suite_name: {suite_name}, case_name: {case_name}");
 			assert!(
 				is_valid_rust_identifier(suite_name),
@@ -290,7 +295,7 @@ fn discover_suites() -> HashMap<String, TestSuite> {
 					case_name.to_string(),
 					TestCase {
 						js_file: path,
-						skipped,
+						skipped: skipped || suite_ignored,
 					},
 				)
 				.expect_none("Duplicate test case name found");

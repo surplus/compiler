@@ -66,6 +66,8 @@ pub struct SurplusElement<'a> {
 	pub fn_expressions: Vec<'a, Box<'a, JSXExpressionContainer<'a>>>,
 	/// The `ref` attribute target expression, if present.
 	pub ref_var: Option<(Expression<'a>, Span)>,
+	/// Event handlers: (`event_name`, `handler_expression`, span).
+	pub event_handlers: Vec<'a, (Atom<'a>, Expression<'a>, Span)>,
 	/// The child expressions of this element, which are the children of the JSX element.
 	pub child_exprs: Vec<'a, SurplusChildType<'a>>,
 }
@@ -81,6 +83,7 @@ impl<'a> SurplusElement<'a> {
 			construction_obj: None,
 			fn_expressions: Vec::new_in(allocator),
 			ref_var: None,
+			event_handlers: Vec::new_in(allocator),
 			child_exprs: Vec::new_in(allocator),
 		}
 	}

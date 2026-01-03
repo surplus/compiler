@@ -16,6 +16,7 @@ pub const REPLACE_CHILDREN: &str = "replaceChildren";
 
 pub const FN_ATTR: &str = "fn";
 pub const REF_ATTR: &str = "ref";
+pub const EVENT_NS: &str = "on";
 
 pub const SET_ATTRIBUTE: &str = "setAttribute";
 pub const SET_ATTRIBUTE_NS: &str = "setAttributeNS";
@@ -24,6 +25,9 @@ pub const REMOVE_ATTRIBUTE_NS: &str = "removeAttributeNS";
 
 pub const DOCUMENT: &str = "document";
 pub const UNDEFINED: &str = "undefined";
+pub const ADD_EVENT_LISTENER: &str = "addEventListener";
+pub const REMOVE_EVENT_LISTENER: &str = "removeEventListener";
+pub const CLEANUP: &str = "cleanup";
 
 pub const V: &str = "v";
 pub const VAL: &str = "val";

@@ -3,12 +3,13 @@ use std::cell::Cell;
 use oxc::{
 	allocator::{Box, CloneIn, FromIn, Vec},
 	ast::ast::{
-		Argument, ArrayExpression, AssignmentExpression, AssignmentOperator, AssignmentTarget,
-		BindingIdentifier, BindingPattern, BindingPatternKind, CallExpression, Expression,
-		ExpressionStatement, IdentifierName, IdentifierReference, JSXElement, JSXElementName,
-		ObjectProperty, ObjectPropertyKind, ParenthesizedExpression, PropertyKey, PropertyKind,
-		ReturnStatement, Statement, StaticMemberExpression, StringLiteral, VariableDeclaration,
-		VariableDeclarationKind, VariableDeclarator,
+		Argument, ArrayExpression, ArrowFunctionExpression, AssignmentExpression,
+		AssignmentOperator, AssignmentTarget, BindingIdentifier, BindingPattern,
+		BindingPatternKind, CallExpression, Expression, ExpressionStatement, FormalParameter,
+		FormalParameterKind, FormalParameters, FunctionBody, IdentifierName, IdentifierReference,
+		JSXElement, JSXElementName, ObjectProperty, ObjectPropertyKind, ParenthesizedExpression,
+		PropertyKey, PropertyKind, ReturnStatement, Statement, StaticMemberExpression,
+		StringLiteral, VariableDeclaration, VariableDeclarationKind, VariableDeclarator,
 	},
 	diagnostics::OxcDiagnostic,
 	semantic::ReferenceFlags,
@@ -18,7 +19,8 @@ use oxc_traverse::TraverseCtx;
 
 use crate::{
 	constants::{
-		CHILDREN, COMPILE, CREATE_ELEMENT, CREATE_ELEMENT_NS, DOCUMENT, REPLACE_CHILDREN, S,
+		ADD_EVENT_LISTENER, CHILDREN, CLEANUP, COMPILE, CREATE_ELEMENT, CREATE_ELEMENT_NS,
+		DOCUMENT, REMOVE_EVENT_LISTENER, REPLACE_CHILDREN, S,
 	},
 	element::SurplusChildType,
 	tag_ns::tag_ns,
@@ -347,7 +349,7 @@ impl<'a> super::SurplusTraverser<'a> {
 			}
 		}
 
-		// Get the return value before we do a mutable borrow.
+		// Get the return value and event handler data before we do a mutable borrow.
 		let retval = self
 			.element_stack
 			.last()
@@ -358,6 +360,325 @@ impl<'a> super::SurplusTraverser<'a> {
 			.ident
 			.clone_in(self.allocator);
 
+		let event_handlers: std::vec::Vec<_> = self
+			.element_stack
+			.last()
+			.unwrap()
+			.event_handlers
+			.iter()
+			.map(|(name, expr, span)| (*name, expr.clone_in(self.allocator), *span))
+			.collect();
+
+		let target_ident = self
+			.element_stack
+			.last()
+			.unwrap()
+			.elem
+			.as_ref()
+			.unwrap()
+			.ident
+			.clone_in(self.allocator);
+		// Build event handler statements before mutable borrow
+		let event_stmts =
+			if event_handlers.is_empty() {
+				std::vec::Vec::new()
+			} else {
+				let mut stmts = std::vec::Vec::new();
+
+				for (event_name, handler_expr, event_span) in event_handlers {
+					let target_ref = target_ident.clone_in(self.allocator);
+
+					// Build: S(((e, n, h) => { e.addEventListener(n, h); S.cleanup(() => e.removeEventListener(n, h)); })(element, "eventname", handler))
+
+					// e.addEventListener(n, h)
+					let add_listener =
+						Statement::ExpressionStatement(ctx.alloc(ExpressionStatement {
+							span: event_span,
+							expression: Expression::CallExpression(ctx.alloc(CallExpression {
+								span: event_span,
+								callee: Expression::StaticMemberExpression(ctx.alloc(
+									StaticMemberExpression {
+										span: event_span,
+										object: Expression::Identifier(ctx.alloc(
+											IdentifierReference {
+												span: event_span,
+												name: Atom::new_const("e"),
+												reference_id: Cell::new(None),
+											},
+										)),
+										property: IdentifierName {
+											span: event_span,
+											name: Atom::new_const(ADD_EVENT_LISTENER),
+										},
+										optional: false,
+									},
+								)),
+								type_arguments: None,
+								arguments: Vec::from_array_in(
+									[
+										Argument::Identifier(Box::from_in(
+											IdentifierReference {
+												span: event_span,
+												name: Atom::new_const("n"),
+												reference_id: Cell::new(None),
+											},
+											self.allocator,
+										)),
+										Argument::Identifier(Box::from_in(
+											IdentifierReference {
+												span: event_span,
+												name: Atom::new_const("h"),
+												reference_id: Cell::new(None),
+											},
+											self.allocator,
+										)),
+									],
+									self.allocator,
+								),
+								optional: false,
+								pure: false,
+							})),
+						}));
+
+					// S.cleanup(() => e.removeEventListener(n, h))
+					let cleanup_stmt = Statement::ExpressionStatement(ctx.alloc(ExpressionStatement {
+   					span: event_span,
+   					expression: Expression::CallExpression(ctx.alloc(CallExpression {
+   						span: event_span,
+   						callee: Expression::StaticMemberExpression(ctx.alloc(StaticMemberExpression {
+   							span: event_span,
+   							object: Expression::Identifier(ctx.alloc(IdentifierReference {
+   								span: event_span,
+   								name: S,
+   								reference_id: Cell::new(Some(self.s_ref)),
+   							})),
+   							property: IdentifierName {
+   								span: event_span,
+   								name: Atom::new_const(CLEANUP),
+   							},
+   							optional: false,
+   						})),
+   						type_arguments: None,
+   						arguments: Vec::from_array_in(
+   							[Argument::ArrowFunctionExpression(ctx.alloc(ArrowFunctionExpression {
+   								span: event_span,
+   								expression: true,
+   								r#async: false,
+   								type_parameters: None,
+   								params: ctx.alloc(FormalParameters {
+   									span: event_span,
+   									kind: FormalParameterKind::ArrowFormalParameters,
+   									items: Vec::new_in(self.allocator),
+   									rest: None,
+   								}),
+   								return_type: None,
+   								body: ctx.alloc(FunctionBody {
+   									span: event_span,
+   									directives: Vec::new_in(self.allocator),
+   									statements: Vec::from_array_in(
+   										[Statement::ExpressionStatement(ctx.alloc(ExpressionStatement {
+   											span: event_span,
+   											expression: Expression::CallExpression(ctx.alloc(CallExpression {
+   												span: event_span,
+   												callee: Expression::StaticMemberExpression(ctx.alloc(StaticMemberExpression {
+   													span: event_span,
+   													object: Expression::Identifier(ctx.alloc(IdentifierReference {
+   														span: event_span,
+   														name: Atom::new_const("e"),
+   														reference_id: Cell::new(None),
+   													})),
+   													property: IdentifierName {
+   														span: event_span,
+   														name: Atom::new_const(REMOVE_EVENT_LISTENER),
+   													},
+   													optional: false,
+   												})),
+   												type_arguments: None,
+   												arguments: Vec::from_array_in(
+   													[
+   														Argument::Identifier(Box::from_in(IdentifierReference {
+   															span: event_span,
+   															name: Atom::new_const("n"),
+   															reference_id: Cell::new(None),
+   														}, self.allocator)),
+   														Argument::Identifier(Box::from_in(IdentifierReference {
+   															span: event_span,
+   															name: Atom::new_const("h"),
+   															reference_id: Cell::new(None),
+   														}, self.allocator)),
+   													],
+   													self.allocator,
+   												),
+   												optional: false,
+   												pure: false,
+   											})),
+   										}))],
+   										self.allocator,
+   									),
+   								}),
+   								scope_id: Cell::new(None),
+   								pure: false,
+   							}))],
+   							self.allocator,
+   						),
+   						optional: false,
+   						pure: false,
+   					})),
+   				}));
+
+					// ((e, n, h) => () => { ... }) - the arrow function that takes parameters and returns arrow
+					let iife_function = Expression::ArrowFunctionExpression(ctx.alloc(ArrowFunctionExpression {
+   					span: event_span,
+   					expression: true,
+   					r#async: false,
+   					type_parameters: None,
+   					params: ctx.alloc(FormalParameters {
+   						span: event_span,
+   						kind: FormalParameterKind::ArrowFormalParameters,
+   						items: Vec::from_array_in(
+   							[
+   								FormalParameter {
+   									span: event_span,
+   									decorators: Vec::new_in(self.allocator),
+   									pattern: BindingPattern {
+   										kind: BindingPatternKind::BindingIdentifier(ctx.alloc(BindingIdentifier {
+   											span: event_span,
+   											name: Atom::new_const("e"),
+   											symbol_id: Cell::new(None),
+   										})),
+   										type_annotation: None,
+   										optional: false,
+   									},
+   									accessibility: None,
+   									readonly: false,
+   									r#override: false,
+   								},
+   								FormalParameter {
+   									span: event_span,
+   									decorators: Vec::new_in(self.allocator),
+   									pattern: BindingPattern {
+   										kind: BindingPatternKind::BindingIdentifier(ctx.alloc(BindingIdentifier {
+   											span: event_span,
+   											name: Atom::new_const("n"),
+   											symbol_id: Cell::new(None),
+   										})),
+   										type_annotation: None,
+   										optional: false,
+   									},
+   									accessibility: None,
+   									readonly: false,
+   									r#override: false,
+   								},
+   								FormalParameter {
+   									span: event_span,
+   									decorators: Vec::new_in(self.allocator),
+   									pattern: BindingPattern {
+   										kind: BindingPatternKind::BindingIdentifier(ctx.alloc(
+   											BindingIdentifier {
+   											span: event_span,
+   											name: Atom::new_const("h"),
+   											symbol_id: Cell::new(None),
+   										})),
+   										type_annotation: None,
+   										optional: false,
+   									},
+   									accessibility: None,
+   									readonly: false,
+   									r#override: false,
+   								},
+   							],
+   							self.allocator,
+   						),
+   						rest: None,
+   					}),
+   					return_type: None,
+   					body: ctx.alloc(FunctionBody {
+   						span: event_span,
+   						directives: Vec::new_in(self.allocator),
+   						statements: Vec::from_array_in(
+   							[Statement::ExpressionStatement(ctx.alloc(ExpressionStatement {
+   								span: event_span,
+   								expression: Expression::ArrowFunctionExpression(ctx.alloc(
+   									ArrowFunctionExpression {
+   									span: event_span,
+   									expression: false,
+   									r#async: false,
+   									type_parameters: None,
+   									params: ctx.alloc(FormalParameters {
+   										span: event_span,
+   										kind: FormalParameterKind::ArrowFormalParameters,
+   										items: Vec::new_in(self.allocator),
+   										rest: None,
+   									}),
+   									return_type: None,
+   									body: ctx.alloc(FunctionBody {
+   										span: event_span,
+   										directives: Vec::new_in(self.allocator),
+   										statements: Vec::from_array_in([add_listener,
+   											cleanup_stmt], self.allocator),
+   									}),
+   									scope_id: Cell::new(None),
+   									pure: false,
+   								})),
+   							}))],
+   							self.allocator,
+   						),
+   					}),
+   					scope_id: Cell::new(None),
+   					pure: false,
+   				}));
+
+					// (iife_function)(element, "eventname", handler) - call the IIFE
+					let iife_call = Expression::CallExpression(ctx.alloc(CallExpression {
+						span: event_span,
+						callee: Expression::ParenthesizedExpression(ctx.alloc(
+							ParenthesizedExpression {
+								span: event_span,
+								expression: iife_function,
+							},
+						)),
+						type_arguments: None,
+						arguments: Vec::from_array_in(
+							[
+								Argument::from(target_ref),
+								Argument::StringLiteral(ctx.alloc(StringLiteral {
+									span: event_span,
+									value: event_name,
+									raw: None,
+									lossy: false,
+								})),
+								Argument::from(handler_expr),
+							],
+							self.allocator,
+						),
+						optional: false,
+						pure: false,
+					}));
+
+					// S(iife_call) - wrap the IIFE call in S()
+					let s_wrapped = Expression::CallExpression(ctx.alloc(CallExpression {
+						span: event_span,
+						callee: Expression::Identifier(ctx.alloc(IdentifierReference {
+							span: event_span,
+							name: S,
+							reference_id: Cell::new(Some(self.s_ref)),
+						})),
+						type_arguments: None,
+						arguments: Vec::from_array_in([Argument::from(iife_call)], self.allocator),
+						optional: false,
+						pure: false,
+					}));
+
+					stmts.push(Statement::ExpressionStatement(ctx.alloc(
+						ExpressionStatement {
+							span: event_span,
+							expression: s_wrapped,
+						},
+					)));
+				}
+
+				stmts
+			};
 		let elem = self.element_stack.last_mut().unwrap();
 
 		// Now set the element reference.
@@ -437,6 +758,11 @@ impl<'a> super::SurplusTraverser<'a> {
 						})),
 					},
 				)));
+		}
+
+		// Add event handler statements
+		for stmt in event_stmts {
+			elem.statements.push(stmt);
 		}
 
 		elem.statements
