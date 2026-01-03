@@ -9,15 +9,17 @@ repository.workspace = true
 rust-version = "1.88.0"
 publish = false
 
-[dependencies]
+build = "build.rs"
+
+[dev-dependencies]
 surplus-cli = { path = "../surplus-cli" }
-clap.workspace = true
+base64.workspace = true
+
+[build-dependencies]
 syn.workspace = true
-oxc.workspace = true
 proc-macro2.workspace = true
 quote.workspace = true
 prettyplease.workspace = true
-pretty_assertions.workspace = true
 
 [lints]
 workspace = true

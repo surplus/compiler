@@ -24,7 +24,7 @@ syn = { version = "2.0.110", features = ["full"] }
 proc-macro2 = "1.0.103"
 quote = "1.0.42"
 prettyplease = "0.2.37"
-pretty_assertions = "1.4.1"
+base64 = "0.22.1"
 
 [workspace.lints.rust]
 missing_docs = "warn"

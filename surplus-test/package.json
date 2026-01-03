@@ -1,0 +1,8 @@
+{
+	"name": "surplus-test-deps",
+	"private": true,
+	"dependencies": {
+		"@surplus/s": "1.2.0",
+		"jsdom": "27.4.0"
+	}
+}
