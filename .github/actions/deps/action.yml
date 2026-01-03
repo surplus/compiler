@@ -1,15 +1,19 @@
 name: rust
-description: Prepares the runner to use the Rust toolchain
+description: Prepares dependencies for each job
 runs:
   using: "composite"
   steps:
-    - name: Install Rust
+    - name: Install Rust (stable)
       uses: dtolnay/rust-toolchain@master
       with:
         toolchain: stable
         components: rustfmt, clippy, rustc-dev, rust-src, llvm-tools-preview
-    - name: Install Rust
+    - name: Install Rust (nightly)
       uses: dtolnay/rust-toolchain@master
       with:
         toolchain: nightly
         components: rustfmt, clippy, rustc-dev, rust-src, llvm-tools-preview
+    - name: Install recent enough Node version
+      uses: actions/setup-node@v5
+      with:
+        node-version: '>=22.21.1'

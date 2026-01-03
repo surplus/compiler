@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: 'true'
-      - uses: ./.github/actions/rust
+      - uses: ./.github/actions/deps
       - name: Lint (rustfmt)
         run: cargo +nightly fmt --check
   lint-tests:
@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: 'true'
-      - uses: ./.github/actions/rust
+      - uses: ./.github/actions/deps
       - name: Lint (surplus-test)
         run: cargo run -p surplus-test -- --check
   lint-clippy:
@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: 'true'
-      - uses: ./.github/actions/rust
+      - uses: ./.github/actions/deps
       - name: Lint (clippy)
         run: cargo clippy --all-targets --all-features -- -D clippy::all
   test:
@@ -42,7 +42,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: 'true'
-      - uses: ./.github/actions/rust
+      - uses: ./.github/actions/deps
       - name: Test
         run: cargo test --all-features
   build-debug:
@@ -51,7 +51,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: 'true'
-      - uses: ./.github/actions/rust
+      - uses: ./.github/actions/deps
       - name: Build (debug)
         run: cargo build --all-features
   build-release:
@@ -60,7 +60,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: 'true'
-      - uses: ./.github/actions/rust
+      - uses: ./.github/actions/deps
       - name: Build (release)
         run: cargo build --release --all-features
   build-wasm:
@@ -69,7 +69,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: 'true'
-      - uses: ./.github/actions/rust
+      - uses: ./.github/actions/deps
       - name: Install wasm32 target
         run: rustup target add wasm32-unknown-unknown
       - name: Install wasm-pack
