@@ -40,6 +40,19 @@ String.prototype.is = function(o) {
 	}
 }
 
+String.prototype.isLike = function(o) {
+	const normalize = (str) => str.replace(/[\s\r\v\t\n]+/g, ' ').trim();
+	const thisText = normalize(valueOf(this));
+	const otherText = normalize(valueToString(o));
+	try {
+		thisText.is(otherText);
+	} catch (e) {
+		const e2 = new Error(`.isLike() normalized string mismatch`);
+		e2.cause = e;
+		throw e2;
+	}
+}
+
 Boolean.prototype.is = function(o) {
 	o = Boolean(valueOf(o));
 	if (typeof o !== 'boolean') throw new Error(`.is() argument is not a boolean`);
@@ -150,6 +163,37 @@ Element.prototype.exactProps = function(props) {
 	}
 }
 
+Element.prototype.checkProps = function(props) {
+	props = valueOf(props);
+	if (typeof props !== 'object' || props === null) {
+		throw new Error(`.checkProps() argument is not an object`);
+	}
+	const thisProps = this.getAttributeNames();
+	const propKeys = Object.keys(props);
+	const missingProps = propKeys.filter(p => !thisProps.includes(p));
+	if (missingProps.length > 0) {
+		throw new Error(`.checkProps() target is missing properties: ${missingProps.join(', ')}`);
+	}
+	for (const key of propKeys) {
+		const thisValue = this.getAttribute(key);
+		const oValue = valueToString(props[key]);
+		try {
+			thisValue.is(oValue);
+		} catch (e) {
+			const e2 = new Error(`.checkProps() property "${key}" mismatch`);
+			e2.cause = e;
+			throw e2;
+		}
+	}
+}
+
 Element.prototype.text = function() {
 	return this.textContent;
+}
+
+Element.prototype.hasText = function(substring) {
+	const text = this.textContent;
+	if (!text.includes(valueToString(substring))) {
+		throw new Error(`.hasText() text does not contain "${substring}": got "${text}"`);
+	}
 }
